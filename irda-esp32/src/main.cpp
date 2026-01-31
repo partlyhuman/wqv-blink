@@ -1,5 +1,6 @@
 /**
- * Implementation of WQV-1 protocol documented at https://www.mgroeber.de/wqvprot.html by @partlyhuman
+ * Implementation of WQV-1 protocol by @partlyhuman
+ * Based on reverse engineering by https://www.mgroeber.de/wqvprot.html
  */
 #include "FFat.h"
 #include "PSRamFS.h"
