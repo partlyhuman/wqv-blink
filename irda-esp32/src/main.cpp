@@ -3,7 +3,6 @@
  * Based on reverse engineering by https://www.mgroeber.de/wqvprot.html
  */
 #include "FFat.h"
-#include "PSRamFS.h"
 #include "config.h"
 #include "display.h"
 #include "frame.h"
@@ -11,6 +10,10 @@
 #include "irda_hal.h"
 #include "log.h"
 #include "msc.h"
+
+#ifdef ENABLE_PSRAM
+#include "PSRamFS.h"
+#endif
 
 static const char *TAG = "Main";
 static const char *DUMP_PATH = "/dump.bin";
@@ -45,14 +48,15 @@ void setup() {
 
     // Should be a little under 1mb. PSRamFS will use heap if not available, we want to prevent that though
     usePsram = false;
+#ifdef ENABLE_PSRAM
     size_t psramSize = MAX_IMAGES * sizeof(Image::Image) + 1024;
     if (psramInit() && psramSize < ESP.getMaxAllocPsram() && psramSize < ESP.getFreePsram()) {
-        LOGD(TAG, "Initializing PSRAM...");
         usePsram = PSRamFS.setPartitionSize(psramSize) && PSRamFS.begin(true);
     }
     if (!usePsram) {
         LOGD(TAG, "Using FFAT instead of PSRAM...");
     }
+#endif
 
     MassStorage::init();
     Image::init();
@@ -281,12 +285,13 @@ bool downloadImages() {
 
     size_t size = imgCount * sizeof(Image::Image);
     File dump;
-    if (usePsram) {
-        LOGD(TAG, "Using psram");
+#ifdef ENABLE_PSRAM
+    if (usePsram)
         dump = PSRamFS.open(DUMP_PATH, FILE_WRITE);
-    } else {
+    else
+#endif
         dump = FFat.open(DUMP_PATH, FILE_WRITE);
-    }
+
     if (!dump) {
         LOGE(TAG, "Failed to allocate file %d bytes", size);
         return false;
@@ -341,7 +346,13 @@ void loop() {
                 // Don't require a clean disconnect to continue
                 closeSession();
 
-                File dump = usePsram ? PSRamFS.open(DUMP_PATH, FILE_READ) : FFat.open(DUMP_PATH, FILE_READ);
+                File dump;
+#ifdef ENABLE_PSRAM
+                if (usePsram)
+                    dump = PSRamFS.open(DUMP_PATH, FILE_READ);
+                else
+#endif
+                    dump = FFat.open(DUMP_PATH, FILE_READ);
                 Image::exportImagesFromDump(dump);
                 dump.close();
                 delay(250);  // Give the 100% screen some time to register
