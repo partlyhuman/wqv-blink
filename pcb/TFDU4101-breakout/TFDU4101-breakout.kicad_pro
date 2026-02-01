@@ -563,7 +563,7 @@
       "plot": "",
       "pos_files": "",
       "specctra_dsn": "",
-      "step": "",
+      "step": "TFDU4101-breakout.step",
       "svg": "",
       "vrml": ""
     },

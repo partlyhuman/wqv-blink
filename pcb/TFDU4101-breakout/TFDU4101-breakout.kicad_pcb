@@ -909,6 +909,17 @@
 			(uuid "5ed507a1-a98c-44a6-af16-b854de8c3a49")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/../Libraries/TFDU4101.step"
+			(offset
+				(xyz 0 0.25 2.5)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz -90 -0 -90)
+			)
+		)
 	)
 	(footprint "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical"
 		(layer "B.Cu")
