@@ -65,33 +65,36 @@ bool init() {
 }
 
 void showIdleScreen() {
+    static const unsigned char PROGMEM image_Layer_12_bits[] = {
+        0xff, 0xff, 0xff, 0x80, 0x00, 0x01, 0x8e, 0x00, 0x71, 0x91, 0x00, 0x89, 0xa0, 0x81, 0x05, 0xa0, 0x81,
+        0x05, 0xa0, 0x81, 0x05, 0x91, 0x00, 0x89, 0x8e, 0x00, 0x71, 0x80, 0x00, 0x01, 0xff, 0xff, 0xff};
+
     display.clearDisplay();
 
-    display.drawRect(50, 50, 24, 11, 1);
-
-    display.drawCircle(55, 55, 3, 1);
-
-    display.drawCircle(68, 55, 3, 1);
+    display.fillRect(0, 0, 128, 9, 1);
 
     display.setTextColor(1);
     display.setTextWrap(false);
-    display.setFont(&_1980v23P04_16);
-    display.setCursor(26, 43);
-    display.print("AND AIM HERE");
-
-    display.setCursor(24, 32);
+    display.setCursor(26, 26);
     display.print("IR > COM > PC");
 
-    display.setCursor(47, 21);
-    display.print("PRESS");
+    display.setCursor(38, 15);
+    display.print("On watch:");
 
-    display.drawLine(0, 9, 127, 9, 1);
-
+    display.setTextColor(0);
+    display.setFont(&_1980v23P04_16);
     display.setCursor(93, 7);
     display.print("WQV-1");
 
     display.setCursor(1, 7);
     display.print("SEARCHING");
+
+    display.setTextColor(1);
+    display.setFont();
+    display.setCursor(31, 50);
+    display.print("Aim at");
+
+    display.drawBitmap(71, 48, image_Layer_12_bits, 24, 11, 1);
 
     display.display();
 }
@@ -99,9 +102,9 @@ void showIdleScreen() {
 void showConnectingScreen(int offset) {
     display.clearDisplay();
 
-    display.drawLine(0, 9, 127, 9, 1);
+    display.fillRect(0, 0, 128, 9, 1);
 
-    display.setTextColor(1);
+    display.setTextColor(0);
     display.setTextWrap(false);
     display.setFont(&_1980v23P04_16);
     display.setCursor(93, 7);
@@ -121,9 +124,8 @@ void showProgressScreen(size_t bytes, size_t totalBytes, size_t bytesPerImage, c
     static uint8_t frame = 0;
 
     display.clearDisplay();
-
+    display.fillRect(0, 0, 128, 9, 1);
     display.drawRect(1, 53, 125, 9, 1);
-
     display.fillRect(3, 55, 1, 5, 1);
 
     // Progress bar, from w=0 to w=121
@@ -131,14 +133,12 @@ void showProgressScreen(size_t bytes, size_t totalBytes, size_t bytesPerImage, c
 
     display.setTextColor(1);
     display.setTextWrap(false);
-    display.setFont(&_1980v23P04_16);
-    display.setCursor(38, 34);
+    display.setCursor(38, 25);
     display.printf("Photo %d/%d", 1 + bytes / bytesPerImage, totalBytes / bytesPerImage);
 
+    display.setFont(&_1980v23P04_16);
     display.setCursor(1, 50);
     display.printf("%0.0f%%", 100.0f * bytes / totalBytes);
-
-    display.drawLine(0, 9, 127, 9, 1);
 
     display.setCursor(93, 7);
     display.print("WQV-1");
@@ -158,15 +158,16 @@ void showMountedScreen() {
 
     display.setTextColor(1);
     display.setTextWrap(false);
-    display.setFont(&_1980v23P04_16);
-    display.setCursor(8, 51);
+    display.setCursor(14, 43);
     display.print("USB drive mounted");
 
-    display.setCursor(13, 60);
+    display.setCursor(17, 54);
     display.print("Eject when done!");
 
-    display.drawLine(0, 9, 127, 9, 1);
+    display.fillRect(0, 0, 128, 9, 1);
 
+    display.setTextColor(0);
+    display.setFont(&_1980v23P04_16);
     display.setCursor(93, 7);
     display.print("WQV-1");
 
