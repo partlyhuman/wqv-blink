@@ -26,11 +26,3 @@ Other ESP32 SoCs like the C3 lack the hardware to support USB Device mode, which
 PSRAM is used if found on your board, but is not required. Flash space large enough to store 99 images (<1MB) as well as the program is required, should not be an issue.
 
 A Vishay TFDU4101 is the only required external component, used for bidirectional IRDA communication with the watch. It is still in production and widely available for cheap! In this repository you will find a breakout PCB that will give it 1.54mm standard header pins. Some external capacitors and resistors are recommended but actually none are required, see the datasheet. The repository also includes PCB(s) that integrate all components and passives with popular ESP32S2/3 dev board(s).
-
-## Building
-
-There are some library changes required to compile. Easiest way to find where the modifications are required is to try a build and check compiler output.
-
-* Required: Hack `FFat.h` to make `_wl_handle` public (e.g. comment out the line `private:`).
-* Optional: Using the combination of the [pioarduino](https://github.com/pioarduino/platform-espressif32) platform, and the ESP32-PSRamFS library, requires a change to the `pfs.c` file. update the call to `esp_spiram_init()` to be `esp_psram_init()`.
-	* Realistically, this feature is an unnecessary optimization and can be disabled by omitting the `-DENABLE_PSRAM` build flag and library

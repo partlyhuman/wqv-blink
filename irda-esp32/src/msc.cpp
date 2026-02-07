@@ -3,9 +3,14 @@
 
 #include "msc.h"
 
-#include <Arduino.h>
+// BEGIN EVIL HACK
+// This makes mass storage access to the FAT FS trivially possible
+// by exposing an internal filesystem hook that MSC can use
+#define private public
+#include <FFat.h>
+#undef private
+// END EVIL HACK
 
-#include "FFat.h"
 #include "FS.h"
 #include "USB.h"
 #include "USBMSC.h"
@@ -79,7 +84,9 @@ void init() {
         return;
     }
 
-    // flash_handle = FFat._wl_handle;  // FFat.h is hacked to made this public
+    // BEGIN EVIL HACK
+    flash_handle = FFat._wl_handle;
+    // END EVIL HACK
     sect_size = wl_sector_size(flash_handle);
     total_size = wl_size(flash_handle);
     sect_cnt = total_size / sect_size;
