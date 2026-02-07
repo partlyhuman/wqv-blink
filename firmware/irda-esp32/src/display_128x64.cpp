@@ -1,5 +1,6 @@
 #ifdef ENABLE_DISPLAY_128x64
-#include "Adafruit_SSD1306.h"
+#include <Adafruit_SSD1306.h>
+
 #include "_1980v23P04_16.h"
 #include "config.h"
 #include "display.h"

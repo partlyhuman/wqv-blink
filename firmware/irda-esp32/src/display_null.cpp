@@ -1,5 +1,5 @@
 #ifndef ENABLE_DISPLAY_128x64
-#ifndef ENABLE_DISPLAY_72x40
+#ifndef ENABLE_DISPLAY_RGBLED
 #include "display.h"
 
 namespace Display {

@@ -2,7 +2,8 @@
  * Implementation of WQV-1 protocol by @partlyhuman
  * Based on reverse engineering by https://www.mgroeber.de/wqvprot.html
  */
-#include "FFat.h"
+#include <FFat.h>
+
 #include "config.h"
 #include "display.h"
 #include "frame.h"

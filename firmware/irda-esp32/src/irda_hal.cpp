@@ -1,7 +1,8 @@
 #include "irda_hal.h"
 
+#include <hal/uart_hal.h>
+
 #include "config.h"
-#include "hal/uart_hal.h"
 
 // Communicate with the TFDU4101. Connecting UART to the RX/TX pins as normal is not sufficient.
 // It needs to use the IRDA physical layer https://www.vishay.com/docs/82513/physicallayer.pdf

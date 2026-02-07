@@ -1,6 +1,5 @@
 // Based on a gist by @frank26080115. Thank you!
 // https://gist.githubusercontent.com/frank26080115/82e2b4256883604016e177bdd78790c2/raw/2c962bcb94932355c75bc30ba39484443a750226/usbmsc_fat_demo.ino
-
 #include "msc.h"
 
 // BEGIN EVIL HACK
@@ -11,9 +10,9 @@
 #undef private
 // END EVIL HACK
 
-#include "FS.h"
-#include "USB.h"
-#include "USBMSC.h"
+#include <USB.h>
+#include <USBMSC.h>
+
 #include "config.h"
 #include "log.h"
 

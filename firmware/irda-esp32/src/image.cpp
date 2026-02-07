@@ -1,10 +1,11 @@
 #include "image.h"
 
+#include <FFat.h>
+
+#include <ctime>
 #include <string>
 #include <unordered_map>
 
-#include "FFat.h"
-#include "ctime"
 #include "display.h"
 #include "log.h"
 

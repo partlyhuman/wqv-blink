@@ -36,3 +36,8 @@
 #ifndef PIN_I2C_SCL
 #define PIN_I2C_SCL SCL
 #endif
+
+// RGB LED
+#ifndef PIN_WS2812
+#define PIN_WS2812 48
+#endif
