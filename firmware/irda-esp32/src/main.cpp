@@ -341,8 +341,10 @@ void onManualModeToggleButton() {
 
 void loop() {
     if (mscMode) {
-        yield();
+        Display::showMountedScreen();
     } else {
+        // Needed to clear after errors
+        Display::showIdleScreen();
         if (openSession()) {
             if (downloadImages()) {
                 // Don't require a clean disconnect to continue

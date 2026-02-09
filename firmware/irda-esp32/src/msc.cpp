@@ -104,13 +104,13 @@ void init() {
 
 void begin() {
     digitalWrite(PIN_LED, LED_OFF);
-    Serial.end();
+    // Serial.end();
     MSC.mediaPresent(true);
 }
 
 void end() {
     MSC.mediaPresent(false);
-    Serial.begin(115200);
+    // Serial.begin(115200);
 }
 
 }  // namespace MassStorage

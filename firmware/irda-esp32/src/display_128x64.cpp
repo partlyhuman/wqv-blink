@@ -169,36 +169,45 @@ void showProgressScreen(size_t bytes, size_t totalBytes, size_t bytesPerImage, c
 }
 
 void showMountedScreen() {
-    display.clearDisplay();
+    static unsigned long lastDisplay = 0;
+    static bool flash = true;
+    if (lastDisplay == 0 || millis() - lastDisplay > 750) {
+        display.clearDisplay();
 
-    // file_save
-    display.drawBitmap(56, 19, image_file_save_bits, 16, 16, 1);
+        // file_save
+        if (flash) {
+            display.drawBitmap(56, 19, image_file_save_bits, 16, 16, 1);
+        }
 
-    // Layer 5
-    display.setFont();
-    display.setTextColor(1);
-    display.setTextWrap(false);
-    display.setCursor(14, 43);
-    display.print("USB drive mounted");
+        // Layer 5
+        display.setFont();
+        display.setTextColor(1);
+        display.setTextWrap(false);
+        display.setCursor(14, 43);
+        display.print("USB drive mounted");
 
-    // Layer 5 copy
-    display.setCursor(17, 54);
-    display.print("Eject when done!");
+        // Layer 5 copy
+        display.setCursor(17, 54);
+        display.print("Eject when done!");
 
-    // Layer 6
-    display.fillRect(0, 0, 128, 9, 1);
+        // Layer 6
+        display.fillRect(0, 0, 128, 9, 1);
 
-    // Layer 9
-    display.setTextColor(0);
-    display.setFont(&_1980v23P04_16);
-    display.setCursor(93, 7);
-    display.print("WQV-1");
+        // Layer 9
+        display.setTextColor(0);
+        display.setFont(&_1980v23P04_16);
+        display.setCursor(93, 7);
+        display.print("WQV-1");
 
-    // Layer 2 copy
-    display.setCursor(1, 7);
-    display.print("MOUNTED");
+        // Layer 2 copy
+        display.setCursor(1, 7);
+        display.print("MOUNTED");
 
-    display.display();
+        display.display();
+
+        flash = !flash;
+        lastDisplay = millis();
+    }
 }
 
 // Currently unused
