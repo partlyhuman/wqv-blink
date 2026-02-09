@@ -44,6 +44,10 @@
 
 #include "esp_psram.h"
 
+#if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0))  // IDF 5+
+#undef BOARD_HAS_PSRAM
+#endif
+
 #else
 
 #ifdef CONFIG_IDF_CMAKE     // IDF 4+
@@ -340,9 +344,7 @@ void pfs_set_block_size(size_t block_size) {
 
 void pfs_set_alloc_functions() {
 #if defined BOARD_HAS_PSRAM
-// @partlyhuman: FIX FOR PIOARDUINO
-//  if (esp_spiram_init() != ESP_OK) {
-  if (esp_psram_init() != ESP_OK) {
+  if (esp_spiram_init() != ESP_OK) {
     ESP_LOGE(TAG, "Can't init psram :-(");
     pfs_psram_enabled = false;
   }

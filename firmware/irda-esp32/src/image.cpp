@@ -11,7 +11,7 @@
 
 // Must define this before including stb_image_write
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "../lib/stb_image_write.h"
+#include "stb_image_write.h"
 
 // Which metadata format/s should we use? Feel free to enable multiple or none.
 #define META_TITLE_IFNOTBLANK_FORMAT

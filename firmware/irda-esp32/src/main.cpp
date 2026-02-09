@@ -53,10 +53,8 @@ void setup() {
     if (psramInit() && psramSize < ESP.getMaxAllocPsram() && psramSize < ESP.getFreePsram()) {
         usePsram = PSRamFS.setPartitionSize(psramSize) && PSRamFS.begin(true);
     }
-    if (!usePsram) {
-        LOGD(TAG, "Using FFAT instead of PSRAM...");
-    }
 #endif
+    LOGD(TAG, "Using %s for temp storage", usePsram ? "PSRAM" : "FFAT");
 
     MassStorage::init();
     Image::init();
