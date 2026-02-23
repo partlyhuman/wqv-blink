@@ -1953,13 +1953,13 @@
 		(embedded_fonts no)
 		(model "/Users/roger/Documents/casio-wqv1-ir/pcb/Libraries/TFDU4101.step"
 			(offset
-				(xyz -2.5 0.24 1.5)
+				(xyz 0 0.24 3)
 			)
 			(scale
 				(xyz 1 1 1)
 			)
 			(rotate
-				(xyz -0 -0 -90)
+				(xyz -90 -0 -90)
 			)
 		)
 	)
@@ -2669,6 +2669,17 @@
 			(uuid "a57e8086-ed24-4619-850a-9d3c56f73be1")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/../Libraries/esp32c3supermini.step"
+			(offset
+				(xyz -1.6 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz -0 -0 -0)
+			)
+		)
 	)
 	(gr_arc
 		(start 32 88)
