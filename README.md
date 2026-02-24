@@ -1,6 +1,5 @@
-# Snappy Name TBD Casio WQV-1 USB Sync Dongle
-
-<img src="img/dongle.jpg" width="400"/>
+# QVIckenIR
+(is that a cool name?) A Casio WQV-1 USB Sync Dongle
 
 This is an easy-to-use, self-contained device that retrieves photos from the extremely cool 2000-era [Casio WQV-1 camera watch](https://www.casio.com/us/watches/50th/Heritage/2000s/).
 This project would not be possible without the reverse engineering work of [Marcus Gröber](https://www.mgroeber.de/).
@@ -18,7 +17,36 @@ Pre-assembled devices will be available for purchase soon!
 5. Once completed, the device will show on your computer as a USB drive
 6. Enjoy your photos!
 
-## Build options
+## PCB Build
+
+<img src="img/dongle.jpg" width="400"/>
+
+The PCB, case, and firmware in this repository go together as pictured here.
+
+### Bill of Materials
+
+| Reference | Value | Details |
+|----|----|----|
+| C1 | 4.7u | 0805 Capacitor (optional) |
+| R1 | 0R | 0805 Resistor (optional) |
+| R2 | 47R | 0805 Resistor (optional) |
+| U1 | ESP32-S3 Super Micro | https://www.aliexpress.com/item/1005007523988592.html |
+| U2 | SSD1306_OLED_128x64 | https://www.aliexpress.com/item/1005007883712377.html |
+| U3 | TFDU4101-TR3 | https://www.digikey.com/short/nrdh27mb |
+
+R2 is used to save power to the IR LED. The TFDU4101 has built-in LED resistors so this can be 0R for maximum TX power. R1,C1 are a low-pass filter for the TFDU4101 logic. C1 is recommended 0.1uF or greater, but one or both can be bridged/omitted. Recommended values above from the TFDU4101 datasheet.
+
+### PCB
+
+Gerbers are included in [pcb/WQV1-S3-SuperMini/production/](pcb/WQV1-S3-SuperMini/production/). Fabricate with basic options, nothing fancy. 1.6mm thickness, HASL is just fine.
+
+### Programming and assembly
+
+Builds are automated using platformio. In the [firmware/irda-esp32](firmware/irda-esp32) directory, run `pio run -e esp32_s3_supermini`.
+
+## DIY Build options
+
+<img src="img/printed.jpg" width=400/>
 
 Currently this builds on ESP32-S2 and -S3 based boards. You can choose to include a common 0.96" monochrome SSD1306 screen or not based on the Platform.io environment.
 
