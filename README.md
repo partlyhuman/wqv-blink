@@ -4,9 +4,9 @@
 This is an easy-to-use, self-contained device that retrieves photos from the extremely cool 2000-era [Casio WQV-1 camera watch](https://www.casio.com/us/watches/50th/Heritage/2000s/).
 This project would not be possible without the reverse engineering work of [Marcus Gröber](https://www.mgroeber.de/).
 
-## Coming soon!
+## Purchase
 
-Pre-assembled devices will be available for purchase soon!
+Pre-assembled devices ars available in limited quantities on my [Ko-Fi shop](https://ko-fi.com/s/76fb4d3271)!
 
 ## Usage
 
@@ -34,7 +34,7 @@ The PCB, case, and firmware in this repository go together as pictured here.
 | U2 | SSD1306_OLED_128x64 | https://www.aliexpress.com/item/1005007883712377.html |
 | U3 | TFDU4101-TR3 | https://www.digikey.com/short/nrdh27mb |
 
-R2 is used to save power to the IR LED. The TFDU4101 has built-in LED resistors so this can be 0R for maximum TX power. R1,C1 are a low-pass filter for the TFDU4101 logic. C1 is recommended 0.1uF or greater, but one or both can be bridged/omitted. Recommended values above from the TFDU4101 datasheet.
+R1 is used to save power to the IR LED. The TFDU4101 has built-in LED resistors so this can be 0R for maximum TX power. R2,C1 are a low-pass filter for the TFDU4101 logic. C1 is recommended 0.1uF or greater, but one or both can be bridged/omitted. Recommended values above from the TFDU4101 datasheet.
 
 ### PCB
 
@@ -42,11 +42,13 @@ Gerbers are included in [pcb/WQV1-S3-SuperMini/production/](pcb/WQV1-S3-SuperMin
 
 ### Programming and assembly
 
-Builds are automated using platformio. In the [firmware/irda-esp32](firmware/irda-esp32) directory, run `pio run -e esp32_s3_supermini`.
+Builds are automated using PlatformIO. In the [firmware/irda-esp32](firmware/irda-esp32) directory, run `pio run -e esp32_s3_supermini` or use the PlatformIO VSCode extension.
 
 ## DIY Build options
 
 <img src="img/printed.jpg" width=400/>
+
+Breakouts are included to make a hand-wired device possible using breadboards, perfboards, jumpers, etc.
 
 Currently this builds on ESP32-S2 and -S3 based boards. You can choose to include a common 0.96" monochrome SSD1306 screen or not based on the Platform.io environment.
 
@@ -56,4 +58,4 @@ PSRAM is used if found on your board, but is not required. Flash space large eno
 
 <img src="img/breakout.jpg"/>
 
-A Vishay TFDU4101 is the only required external component, used for bidirectional IRDA communication with the watch. It is still in production and widely available for cheap! In this repository you will find a breakout PCB that will give it 1.54mm standard header pins. Some external capacitors and resistors are recommended but actually none are required, see the datasheet. The repository also includes PCB(s) that integrate all components and passives with popular ESP32S2/3 dev board(s).
+A Vishay TFDU4101 is the only required external component, used for bidirectional IRDA communication with the watch. It is still in production and widely available for cheap! In this repository you will find a breakout PCB that will give it 1.54mm standard header pins. Some external capacitors and resistors are recommended but actually none are required, see the datasheet.
