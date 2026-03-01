@@ -50,7 +50,7 @@ int32_t onWrite(uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize
 
     // flash on writes
     static uint8_t f = HIGH;
-    digitalWrite(LED_BUILTIN, f);
+    digitalWrite(PIN_LED, f);
     f = (f == HIGH) ? LOW : HIGH;
     // TODO something so it doesn't stay on - handle loop, or vxtask/watchdog
 

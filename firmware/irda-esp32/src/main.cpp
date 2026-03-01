@@ -44,7 +44,6 @@ void setup() {
     // while (!Serial);
 
     pinMode(PIN_LED, OUTPUT);
-    digitalWrite(PIN_LED, LED_OFF);
 
     // Should be a little under 1mb. PSRamFS will use heap if not available, we want to prevent that though
     usePsram = false;
@@ -74,6 +73,7 @@ void setup() {
     IRDA_setup(IRDA);
     while (!IRDA);
 
+    digitalWrite(PIN_LED, LED_OFF);
     LOGI(TAG, "Setup complete");
 }
 
