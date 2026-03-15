@@ -11,9 +11,8 @@
 const char* TAG = "Main";
 
 void setup() {
-    USBSerial.begin(115200);
+    USBSerial.begin(BAUDRATE);
     // Attempt to avoid the DTS/RTS reboot
-    USBSerial.setRxBufferSize(1024);
     USBSerial.enableReboot(false);
     USBSerial.setDebugOutput(false);
 
@@ -33,25 +32,31 @@ void setup() {
     while (!IRDA);
 
     digitalWrite(PIN_LED, LED_OFF);
-
-    FFat.begin(true);
 }
 
 static const size_t SERIAL_BUFFER_SIZE = 4096;
-static byte SERIAL_BUFFER[SERIAL_BUFFER_SIZE]{};
+static uint8_t SERIAL_BUFFER[SERIAL_BUFFER_SIZE]{};
+
+static bool b;
 
 void loop() {
     size_t avail = USBSerial.available();
     if (avail > 0) {
+        // digitalWrite(LED_BUILTIN, LED_ON);
         avail = USBSerial.readBytes(SERIAL_BUFFER, min(avail, SERIAL_BUFFER_SIZE));
         IRDA_tx(true);
         IRDA.write(SERIAL_BUFFER, avail);
+        IRDA.flush();
         IRDA_tx(false);
     }
 
     avail = IRDA.available();
     if (avail > 0) {
+        digitalWrite(LED_BUILTIN, LED_ON);
         avail = IRDA.readBytes(SERIAL_BUFFER, min(avail, SERIAL_BUFFER_SIZE));
         USBSerial.write(SERIAL_BUFFER, avail);
+        USBSerial.flush();
     }
+
+    digitalWrite(LED_BUILTIN, LED_OFF);
 }
