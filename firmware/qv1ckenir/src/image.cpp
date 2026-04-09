@@ -25,8 +25,8 @@
 namespace Image {
 
 static const char *TAG = "Image";
-
 static uint8_t expanded[W * H];
+static std::unordered_map<std::string, size_t> timestampCounts;
 
 bool init() {
     return true;
@@ -76,17 +76,20 @@ bool save(const Image *img) {
     // File naming strategies:
     // - count: simple, short filenames, will always collide with multiple syncs. could persist last count
     // static int count = 0;
-    // basepath = "/WQV" + pad2(++count);
+    // basepath = pad2(++count);
     // - including whole date and time, plus count: legible, no collisions, but long
-    // basepath = "/WQV_" + std::to_string(img->month) + "-" + std::to_string(img->day) + "-" +
+    // basepath = std::to_string(img->month) + "-" + std::to_string(img->day) + "-" +
     //            std::to_string(2000 + img->year_minus_2000) + "_" + pad2(img->hour) + "-" + pad2(img->minute);
+    // - just YYYYMMDD, plus count
+    basepath = std::to_string(2000 + img->year_minus_2000) + pad2(img->month) + pad2(img->day);
     // - unix style timestamp, plus count: shorter, no collisions, not very legible
-    basepath = "/WQV_" + std::to_string(time);
+    // basepath = std::to_string(time);
 
-    // try to only set count with overlapping timestamps (note this is never freed)
-    static std::unordered_map<time_t, size_t> timestampCounts;
-    int count = timestampCounts[time]++;
-    if (count > 0) basepath += "_" + std::to_string(count);
+    // try to only set count with overlapping timestamps
+    int count = timestampCounts[basepath]++;
+
+    basepath = "/WQV_" + basepath;
+    if (count) basepath += "_" + std::to_string(count);
 
 #ifdef IMAGE_PNG_FORMAT
     filename = basepath + ".png";
@@ -160,6 +163,7 @@ void exportImagesFromDump(File &dump) {
         LOGE(TAG, "No file!");
         return;
     }
+    timestampCounts.clear();
     size_t count = dump.size() / sizeof(Image);
     dump.seek(0);
     // We'll reuse a single Image, but we want it on the heap, it's big

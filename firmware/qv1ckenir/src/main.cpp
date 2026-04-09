@@ -32,8 +32,6 @@ static uint8_t addr;
 static uint8_t ctrl;
 // Whether we're streaming the transferred data into PSRAM or FAT
 static bool usePsram;
-// Two operation modes, false if IR comms mode, true if USB disk mode
-static bool mscMode = false;
 volatile static bool pendingManualModeToggle;
 
 void IRAM_ATTR onManualModeToggleButton() {
@@ -146,20 +144,19 @@ bool openSession() {
 
     sessionId = 0xff;
 
+    // Set artificially low timeout for connecting so we can retry it frequently for faster connection
+    IRDA.setTimeout(200);
     // >	FFh	B3h	(possibly repeated)
     sendRetry(0xff, 0xb3, nullptr, 0, 1);
     // Frame::writeFrame(0xff, 0xb3);
     // if (!readFrame()) return false;
     // <	FFh	A3h	<hh> <mm> <ss> <ff>
     if (!expect(0xff, 0xa3, 4)) {
-        static uint idleCount = 0;
-        const uint dimAfterIdle = 10;
-        if (++idleCount >= dimAfterIdle) {
-            Display::dim(true);
-        }
         return false;
     }
 
+    // Restore default timeout of 1sec after initial searching
+    IRDA.setTimeout(1000);
     Display::dim(false);
 
     // We don't use the returned time. Maybe a future implementation could... tell you if your watch's time needs to be
@@ -342,21 +339,18 @@ bool closeSession() {
 void loop() {
     if (pendingManualModeToggle) {
         pendingManualModeToggle = false;
-        mscMode = !mscMode;
-        if (mscMode) {
-            Display::dim(false);
-            Display::showMountedScreen();
-            delay(100);
-            MassStorage::begin();
-        } else {
+        Display::dim(false);
+        if (MassStorage::active) {
             MassStorage::end();
-            delay(100);
-            ESP.restart();
+        } else {
+            Display::showMountedScreen();
+            delay(500);
+            MassStorage::begin();
         }
         return;
     }
 
-    if (mscMode) {
+    if (MassStorage::active) {
         return;
     }
 
@@ -383,12 +377,12 @@ void loop() {
             Serial.println("Don't forget to eject when done!");
 
             Serial.flush();
-            mscMode = true;
+            MassStorage::active = true;
             MassStorage::begin();
             return;
         }
     }
 
     // LOGE(TAG, "Failure or no watch present, restarting from handshake");
-    delay(1000);
+    // delay(1000);
 }

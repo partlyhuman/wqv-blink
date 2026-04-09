@@ -11,14 +11,14 @@
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
 #define SCREEN_ADDRESS 0x3C
-
-static int screen;
+#define DIM_AFTER_MS 15000
 
 namespace Display {
 
-const char* TAG = "Display";
+static const char* TAG = "Display";
+static int screen = -1;
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+static Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 static const unsigned char image_frame0_bits[]{0xff, 0xfc, 0x80, 0x04, 0x80, 0x04, 0x80, 0x04, 0x80, 0x04,
                                                0x80, 0x04, 0x80, 0x04, 0x80, 0x04, 0x80, 0x04, 0x80, 0x04,
@@ -98,7 +98,16 @@ void scrollStatus() {
 }
 
 void showIdleScreen() {
-    if (screen == 0) return;
+    static uint32_t firstIdleScreenTime;
+
+    if (screen == 0) {
+        if (millis() - firstIdleScreenTime > DIM_AFTER_MS) {
+            dim(true);
+        }
+        return;
+    }
+    dim(false);
+    firstIdleScreenTime = millis();
     screen = 0;
 
     static const unsigned char image_Layer_12_bits[] = {

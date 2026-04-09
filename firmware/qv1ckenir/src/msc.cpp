@@ -32,6 +32,8 @@ uint32_t sect_size;
 uint32_t total_size;
 uint32_t sect_cnt;
 
+bool active;
+
 void shutdown() {
     MSC.end();
     FFat.end();
@@ -66,14 +68,10 @@ int32_t onRead(uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize) {
 // - Start = 0 : stopped power mode, if load_eject = 1 : unload disk storage
 // - Start = 1 : active mode, if load_eject = 1 : load disk storage
 bool onStartStop(uint8_t power_condition, bool start, bool load_eject) {
-    // Without this, drive just keeps coming back
+    // On host eject:
     if (!start && load_eject) {
-        MSC.mediaPresent(false);
+        end();
         delay(250);
-
-        // Maybe, maybe not
-        shutdown();
-        ESP.restart();
     }
     return true;
 }
@@ -97,6 +95,7 @@ void init() {
     MSC.onRead(onRead);
     MSC.onWrite(onWrite);
     MSC.onStartStop(onStartStop);
+    MSC.isWritable(false);
     MSC.mediaPresent(false);
     MSC.begin(sect_cnt, sect_size);
     USB.begin();
@@ -104,13 +103,13 @@ void init() {
 
 void begin() {
     digitalWrite(PIN_LED, LED_OFF);
-    // Serial.end();
-    MSC.mediaPresent(true);
+    active = true;
+    MSC.mediaPresent(active);
 }
 
 void end() {
-    MSC.mediaPresent(false);
-    // Serial.begin(115200);
+    active = false;
+    MSC.mediaPresent(active);
 }
 
 }  // namespace MassStorage
