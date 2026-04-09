@@ -87,13 +87,18 @@ void dim(bool d) {
 }
 
 void scrollStatus() {
+    // Scrolls the bottom 2 "pages" of 8px
+    // Corresponding with the yellow area of the bicolour OLED screens
+    // Would be nice to find a way to mount the board rightside up and restore the status bar to the top
+    // But at this point that would make firmware updates a bit more difficult for users who already have a rotated
+    // screen
     display.ssd1306_command(SSD1306_RIGHT_HORIZONTAL_SCROLL);
-    display.ssd1306_command(0x00);  // dummy
-    display.ssd1306_command(0);     // start page (48px)
-    display.ssd1306_command(0x00);  // speed (frame interval)
-    display.ssd1306_command(1);     // end page (64px)
-    display.ssd1306_command(0x00);  // dummy
-    display.ssd1306_command(0xFF);  // dummy
+    display.ssd1306_command(0x00);
+    display.ssd1306_command(0);     // start page
+    display.ssd1306_command(0x00);  // interval
+    display.ssd1306_command(1);     // end page
+    display.ssd1306_command(0x00);
+    display.ssd1306_command(0xFF);
     display.ssd1306_command(SSD1306_ACTIVATE_SCROLL);
 }
 

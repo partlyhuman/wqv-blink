@@ -12,6 +12,7 @@
 
 #include <USB.h>
 #include <USBMSC.h>
+#include <ff.h>
 
 #include "config.h"
 #include "log.h"
@@ -103,6 +104,7 @@ void init() {
 
 void begin() {
     digitalWrite(PIN_LED, LED_OFF);
+    f_setlabel("QV1CKENIR");
     active = true;
     MSC.mediaPresent(active);
 }
