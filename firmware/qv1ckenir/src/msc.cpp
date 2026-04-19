@@ -21,6 +21,7 @@
 #define MSC_VENDOR_ID "Partlyhuman"
 #define MSC_PRODUCT_ID "WQV-1 Interface"
 #define MSC_PRODUCT_REVISION "1.0"
+#define DRIVE_LABEL "QV1CKENIR"
 
 namespace MassStorage {
 
@@ -96,7 +97,9 @@ void init() {
     MSC.onRead(onRead);
     MSC.onWrite(onWrite);
     MSC.onStartStop(onStartStop);
+#ifdef READONLY
     MSC.isWritable(false);
+#endif
     MSC.mediaPresent(false);
     MSC.begin(sect_cnt, sect_size);
     USB.begin();
@@ -104,7 +107,7 @@ void init() {
 
 void begin() {
     digitalWrite(PIN_LED, LED_OFF);
-    f_setlabel("QV1CKENIR");
+    f_setlabel(DRIVE_LABEL);
     active = true;
     MSC.mediaPresent(active);
 }
