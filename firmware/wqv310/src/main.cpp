@@ -165,6 +165,10 @@ bool readFrame(unsigned long timeout = 1000) {
         LOGW(TAG, "Malformed");
         return false;
     }
+    if ((seq & 0x0f) == 0x03) {
+        LOGE(TAG, "Error status");
+        return false;
+    }
     return true;
 }
 
@@ -234,11 +238,8 @@ bool openSession() {
     // Expect ACK
     if (!(readFrame() && expectAck())) return false;
 
-    // Generate session ID! Needs to be >3 <=F. Let's just use 4 for now
-    // session = 7;
+    // Generate session ID! Needs to be >3 <=F
     session = random(0x4, 0xf);
-    // session = esp_random() & 0xf;
-    // if (session == 0) session++;
 
     // 0x830401000E -- assign session 04
     const uint8_t SESSION_IDENT[]{0x83, session, 0x01, 0x00, 0x0E};
@@ -492,8 +493,12 @@ std::string getCmdName() {
 }
 
 bool syncInClientRole() {
-    ackLoopInClientRole();
+    std::vector<uint8_t> response;
+    std::span<uint8_t> cmdSpan;
 
+    ackLoopInClientRole();
+    // < 0x9C
+    // 0x090300000010000101341004000000000000000008007403000000001166723A330D0A69643A434153494F2057494320323431312F495220202020200D0A10020000
     if (startsWith(std::span(readBuffer), {session, 0x03, 0x00, 0x00, 0x00, 0x10})) {
         // This one is null terminated
         auto watchFw = std::string(reinterpret_cast<const char *>(readBuffer + 0x26), 0x16);
@@ -501,7 +506,7 @@ bool syncInClientRole() {
     } else {
         return false;
     }
-    // TODO or skip the ack/ack
+    // TODO could we skip the ack/ack?
     writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
     if (!(readFrame() && expectAck())) return false;
@@ -512,28 +517,71 @@ bool syncInClientRole() {
     writeFrame(ourPort, makeseq(SEQ_DATA, false, true), FW_IDENT);
 
     // < 0xBE 0x090301
-    if (!readFrame()) return false;
+    ackLoopInClientRole();
     if (!startsWith(std::span(readBuffer), {session, 0x03, 0x01})) return false;
     LOGD(TAG, "i++ from watch");
     writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
+    // RIMG
     // < 0xB0
     // 0x09030000002003FF003E107DE1003A580000000034080074031000000008007403000000000008000800800002434D4430000000060000000100405748543000000006010052494D47
-    readFrame();
-    LOGI(TAG, "<< %s", getCmdName().c_str());  // RIMG
+    ackLoopInClientRole();
+    LOGI(TAG, "<< %s (expecting RIMG)", getCmdName().c_str());
     // RIMG / +0x20 / 52 bytes extra data
-    auto cmdSpan = std::span(readBuffer).subspan(0, 44);
-    LOGI(TAG, ">> BDY0");
+    cmdSpan = std::span(readBuffer).subspan(0, 44);
     constexpr uint8_t RIMG_EXTRA_DATA[]{0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x08, 0x00, 0x06, 0x00, 0x02, 0x07, 0x08,
                                         0x00, 0x06, 0x00, 0x06, 0x40, 0x04, 0xB0, 0x05, 0x00, 0x03, 0xC0, 0x04, 0x00,
                                         0x03, 0x00, 0x03, 0x20, 0x02, 0x58, 0x02, 0x80, 0x01, 0xE0, 0x01, 0x40, 0x00,
                                         0xF0, 0x03, 0xC4, 0x20, 0x04, 0x01, 0xC4, 0x20, 0x05, 0x00, 0x00, 0x18, 0x00};
-    auto response = cmdToResponse(cmdSpan, 20, RIMG_EXTRA_DATA);
+    response = cmdToResponse(cmdSpan, 20, RIMG_EXTRA_DATA);
+    LOGI(TAG, ">> BDY0");
     writeFrame(ourPort, makeseq(SEQ_DATA, true, true), response);
 
-    readFrame();
-    LOGI(TAG, "< %s", getCmdName().c_str());  // RIMG
-    LOGV(TAG, "THAT'S ALL I GOT");
+    // < 0xBE 0x090301
+    ackLoopInClientRole();
+    if (!startsWith(std::span(readBuffer), {session, 0x03, 0x01})) return false;
+    LOGD(TAG, "i++ from watch");
+    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+
+    // RINF
+    // < 0xD4
+    // 0x09030000002003FF003E107DE1003A580000000034080074031000000008007403000000000008000800810002434D4430000000060000000100405748543000000006010052494E46
+    ackLoopInClientRole();
+    LOGI(TAG, "<< %s (expecting RINF)", getCmdName().c_str());
+    // RINF / -0x0C / 8 bytes extra data
+    cmdSpan = std::span(readBuffer).subspan(0, 44);
+    constexpr uint8_t RINF_EXTRA_DATA[]{0x00, 0x00, 0x10, 0xFF, 0xFF, 0x11, 0xFF, 0xFF};
+    response = cmdToResponse(cmdSpan, -0x0C, RINF_EXTRA_DATA);
+    LOGI(TAG, ">> BDY0");
+    writeFrame(ourPort, makeseq(SEQ_DATA, true, true), response);
+
+    // < 0xBE 0x090301
+    ackLoopInClientRole();
+    if (!startsWith(std::span(readBuffer), {session, 0x03, 0x01})) return false;
+    LOGD(TAG, "i++ from watch");
+    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+
+    // RCMD
+    // < 0xF8
+    // 0x09030000002003FF003E107DE1003A580000000034080074031000000008007403000000000008000800820002434D4430000000060000000100405748543000000006010052434D44
+    ackLoopInClientRole();
+    LOGI(TAG, "<< %s (expecting RCMD)", getCmdName().c_str());
+    // RCMD / -0x0D / 7 bytes extra data
+    cmdSpan = std::span(readBuffer).subspan(0, 44);
+    // NOTE i removed an extra unaccounted for 0xc4 off the end of this.
+    constexpr uint8_t RCMD_EXTRA_DATA[]{0x00, 0x00, 0x20, 0x00, 0x01, 0x00, 0x01};
+    response = cmdToResponse(cmdSpan, -0x0D, RCMD_EXTRA_DATA);
+    LOGI(TAG, ">> BDY0");
+    writeFrame(ourPort, makeseq(SEQ_DATA, true, true), response);
+
+    // < 0xBE 0x090301
+    ackLoopInClientRole();
+    if (!startsWith(std::span(readBuffer), {session, 0x03, 0x01})) return false;
+    LOGD(TAG, "i++ from watch");
+    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+
+    ackLoopInClientRole();
+    LOGI(TAG, "THIS IS HOW FAR I GOT, MAYBE THIS IS THE FILE!?");
 
     return true;
 }
