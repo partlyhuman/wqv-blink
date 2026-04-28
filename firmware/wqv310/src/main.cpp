@@ -165,7 +165,7 @@ bool readFrame(unsigned long timeout = 1000) {
         LOGW(TAG, "Malformed");
         return false;
     }
-    if ((seq & 0x0f) == 0x03) {
+    if (seq == 0x53) {
         LOGE(TAG, "Error status");
         return false;
     }
@@ -262,8 +262,8 @@ bool openSession() {
     return true;
 }
 
-void ackLoopInClientRole() {
-    while (true) {
+void ackLoopInClientRole(size_t limit = 100) {
+    for (size_t i = 0; i < limit; i++) {
         if (!readFrame()) {
             return;
         }
@@ -519,7 +519,7 @@ bool syncInClientRole() {
     // < 0xBE 0x090301
     ackLoopInClientRole();
     if (!startsWith(std::span(readBuffer), {session, 0x03, 0x01})) return false;
-    LOGD(TAG, "i++ from watch");
+    LOGD(TAG, "<< Yield next object from watch");
     writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
     // RIMG
@@ -533,7 +533,7 @@ bool syncInClientRole() {
                                         0x00, 0x06, 0x00, 0x06, 0x40, 0x04, 0xB0, 0x05, 0x00, 0x03, 0xC0, 0x04, 0x00,
                                         0x03, 0x00, 0x03, 0x20, 0x02, 0x58, 0x02, 0x80, 0x01, 0xE0, 0x01, 0x40, 0x00,
                                         0xF0, 0x03, 0xC4, 0x20, 0x04, 0x01, 0xC4, 0x20, 0x05, 0x00, 0x00, 0x18, 0x00};
-    response = cmdToResponse(cmdSpan, 20, RIMG_EXTRA_DATA);
+    response = cmdToResponse(cmdSpan, 0x20, RIMG_EXTRA_DATA);
     LOGI(TAG, ">> BDY0");
     writeFrame(ourPort, makeseq(SEQ_DATA, true, true), response);
 
@@ -564,7 +564,7 @@ bool syncInClientRole() {
     // RCMD
     // < 0xF8
     // 0x09030000002003FF003E107DE1003A580000000034080074031000000008007403000000000008000800820002434D4430000000060000000100405748543000000006010052434D44
-    ackLoopInClientRole();
+    ackLoopInClientRole(999);
     LOGI(TAG, "<< %s (expecting RCMD)", getCmdName().c_str());
     // RCMD / -0x0D / 7 bytes extra data
     cmdSpan = std::span(readBuffer).subspan(0, 44);
