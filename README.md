@@ -1,5 +1,5 @@
 # WQV Blink
-#### A Casio WQV-1 USB Sync Dongle
+#### A Casio WQV Series USB Sync Dongle
 
 This is an easy-to-use, self-contained device that retrieves photos from the series of extremely cool 2000-era [Casio WQV camera watches](https://www.casio.com/us/watches/50th/Heritage/2000s/).
 This project would not be possible without the reverse engineering work of [Marcus Gröber](https://www.mgroeber.de/).
