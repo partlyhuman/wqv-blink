@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "chunk.h"
 #include "config.h"
 #include "display.h"
 #include "frame.h"
@@ -516,13 +517,6 @@ std::string getCmdName() {
     return std::string(reinterpret_cast<const char *>(readBuffer + dataLen - 4), 4);
 }
 
-uint32_t readBigEndianUint32(const uint8_t *p) {
-    return (uint32_t(p[0]) << 24) | (uint32_t(p[1]) << 16) | (uint32_t(p[2]) << 8) | (uint32_t(p[3]));
-}
-uint16_t readBigEndianUint16(const uint8_t *p) {
-    return (uint32_t(p[0]) << 8) | (uint32_t(p[1]));
-}
-
 bool syncInClientRole() {
     std::vector<uint8_t> response;
     std::span<uint8_t> cmdSpan;
@@ -622,7 +616,7 @@ bool syncInClientRole() {
     // it.
 
     for (size_t fileCount = 0; true; fileCount++) {
-        size_t chunkNumber, chunksRemain, chunkBytesTotal, chunkBytesReceived;
+        size_t chunkBytesReceived;
 
         ackLoopInClientRole();
         if (expectStartsWith({session, 0x03, 0x00, 0x00, 0x00, 0x30})) {
@@ -636,14 +630,16 @@ bool syncInClientRole() {
             return false;
         }
 
+        // TODO this is actually a chunk - move into main loop
+        // Really, I think all bytes are included in the .UPF file, and so the .JPG file exists within the .UPF file
+        // NOTE it might have a bit of a special header
         // FIL0
         std::string fileCmdName = std::string(reinterpret_cast<const char *>(readBuffer + 0x42), 4);
         std::string fileName = std::string(reinterpret_cast<const char *>(readBuffer + 0x4C), 12);
+        LOGI(TAG, "<< %s saving to %s", fileCmdName.c_str(), fileName.c_str());
         File file = FFat.open(("/" + fileName + ".jpg").c_str(), "w", true);
         // We'll use this later in the RDY0 response
         uint8_t cmdFil0Seq = readBuffer[0x31];
-        LOGD(TAG, "cmdFil0Seq %02x", cmdFil0Seq);
-        LOGI(TAG, "<< %s saving to %s", fileCmdName.c_str(), fileName.c_str());
         writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
         readFrame();
@@ -651,8 +647,8 @@ bool syncInClientRole() {
         // Find beginning of JPEG file
         auto begin = readBuffer;
         auto end = readBuffer + dataLen;
-        constexpr uint8_t marker[] = {0xFF, 0xD8, 0xFF, 0xE0};
-        auto it = std::search(begin, end, std::begin(marker), std::end(marker));
+        constexpr uint8_t JPEG_MARKER[] = {0xFF, 0xD8, 0xFF, 0xE0};
+        auto it = std::search(begin, end, std::begin(JPEG_MARKER), std::end(JPEG_MARKER));
         if (it == end) {
             LOGE(TAG, "Expected to find the JPEG start marker");
             return false;
@@ -661,56 +657,43 @@ bool syncInClientRole() {
         LOGI(TAG, "Starting copying bytes from position %02x", it - readBuffer);
         writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
-        // TODO - make this totally depend on isFinalChunk and byte counting
-        for (chunksRemain = INT_MAX; chunksRemain > 1;) {
-            bool isFinalChunk = false;
+        // Loop depends on checking if the chunk header says there's no more chunks
 
-            // Sender's upper sequence stays the same as long as we echo
-            // Periodically we send <session> 0B 06, to allow the sender to start a new upper sequence
-
-            // Sender alternates between long and short prefixes (chunk split into two frames)
-
-            // 4 bytes:    0B <session> 00 00
-            //  -- odd frames end here --
-            // 10 bytes:   00 20 03 FF 01 FA 10 01 01 EE (constant string)
-            //  -- beginning of counted bytes --
-            // 4 bytes:    01 fa 10 01 (encodes number of bytes in the full chunk, starting right here, and whether
-            // it's the final chunk)
-            //  -- very first frame ends here --
-            // 4 bytes:    00 00 00 01 (counts up from 0 first chunk)
-            // 4 bytes:    00 00 00 10 (counts down chunks remaining)
-            // DATA
-
+        Chunk::Header header;
+        do {  // LOOP OVER CHUNKS IN FILE
             readFrame();
             LOGD(TAG, "Chunk frame 1/2");
             // First frame
-            uint8_t DATA_FRAME[]{session, 0x03, 0x00, 0x00};
-            uint8_t DATA_CHUNK[]{0x00, 0x20, 0x03, 0xFF};
+            uint8_t SESSION_HEADER[]{session, 0x03, 0x00, 0x00};
 
-            if (std::equal(readBuffer, readBuffer + 4, std::begin(DATA_FRAME))) {
-                LOGD(TAG, "first4 check out");
-            }
-            if (std::equal(readBuffer + 4, readBuffer + 8, std::begin(DATA_CHUNK))) {
-                LOGD(TAG, "chunk tag checks out");
+            if (!expectStartsWith(SESSION_HEADER)) {
+                LOGE(TAG, "Unexpected session header");
+                return false;
             }
 
+            // Take off session header
+            auto maybeHeader = Chunk::parseHeader(std::span(readBuffer).subspan(4, dataLen - 4));
+            if (!maybeHeader.has_value()) {
+                // TODO try an error status instead
+                return false;
+            }
+
+            header = maybeHeader.value();
             chunkBytesReceived = 0;
-            isFinalChunk = (readBuffer[11] & 0x80) > 0;
-            chunkBytesTotal = readBigEndianUint16(readBuffer + 8);
-            chunkNumber = readBigEndianUint32(readBuffer + 14);
-            chunksRemain = readBigEndianUint32(readBuffer + 18);
 
-            Display::showProgressScreen(chunkNumber, chunkNumber + chunksRemain - 1, fileCount);
+            Display::showProgressScreen(header.chunkNumber, header.chunkNumber + header.chunksLeft, fileCount);
 
-            LOGD(TAG, "Chunk %02d/%02d, %02d remain", chunkNumber, chunkNumber + chunksRemain, chunksRemain);
-            file.write(readBuffer + 22, dataLen - 22);
+            LOGD(TAG, "Chunk %02d/%02d, %02d remain", header.chunkNumber, header.chunkNumber + header.chunksLeft,
+                 header.chunksLeft);
+            size_t headersSize = sizeof(SESSION_HEADER) + Chunk::HEADER_SIZE;
+            size_t bytes = dataLen - headersSize;
+            chunkBytesReceived += bytes;
+            file.write(readBuffer + headersSize, bytes);
 
-            // Chunk size count excludes only the initial session framing (4b) and constant id string (10b) before count
-            chunkBytesReceived += dataLen - 14;
-            LOGD(TAG, "Received %d/%d bytes in chunk, expecting more frames? %s", chunkBytesReceived, chunkBytesTotal,
-                 chunkBytesReceived < chunkBytesTotal ? "Yes" : "No");
+            LOGD(TAG, "Received %d/%d bytes in chunk, expecting more frames? %s", chunkBytesReceived, header.chunkSize,
+                 chunkBytesReceived < header.chunkSize ? "Yes" : "No");
 
-            if ((chunkNumber % 2) == 0) {
+            if ((header.chunkNumber % 2) == 0) {
                 LOGD(TAG, ">> continue...");
                 uint8_t CONTINUE[]{0x03, session, 0x06};
                 writeFrame(ourPort, makeseq(SEQ_DATA, true, true), CONTINUE);
@@ -723,21 +706,23 @@ bool syncInClientRole() {
             if (dataLen > 4) {
                 LOGD(TAG, "Chunk frame 2/2");
                 // Continuation frame
-                if (std::equal(readBuffer, readBuffer + 4, std::begin(DATA_FRAME))) {
-                    LOGD(TAG, "first4 check out");
+                if (!expectStartsWith(SESSION_HEADER)) {
+                    LOGE(TAG, "Unexpected session header");
+                    return false;
                 }
-                // NOTE no protection here for data missing
-                file.write(readBuffer + 4, dataLen - 4);
-                // Chunk size includes everything after first 14 bytes of first frame
-                chunkBytesReceived += dataLen;
+
+                headersSize = sizeof(SESSION_HEADER);
+                bytes = dataLen - headersSize;
+                chunkBytesReceived += bytes;
+                file.write(readBuffer + headersSize, bytes);
                 LOGD(TAG, "Received %d/%d bytes in chunk, expecting more frames? %s", chunkBytesReceived,
-                     chunkBytesTotal, chunkBytesReceived < chunkBytesTotal ? "Yes" : "No");
+                     header.chunkSize, chunkBytesReceived < header.chunkSize ? "Yes" : "No");
 
                 writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
             } else if (expectAck()) {
-                if (chunkBytesReceived < chunkBytesTotal) {
+                if (chunkBytesReceived < header.chunkSize) {
                     LOGW(TAG, "No continuation frame, but only received %d/%d bytes in chunk", chunkBytesReceived,
-                         chunkBytesTotal);
+                         header.chunkSize);
                 } else {
                     LOGD(TAG, "No continuation frame... might be ok if this is the end frame");
                 }
@@ -746,7 +731,10 @@ bool syncInClientRole() {
                 LOGE(TAG, "Not sure what to expect here");
                 return false;
             }
-        }
+
+            // Done chunk
+            LOGI(TAG, "Chunk finished=%d chunks left=%d", header.isFinalChunk, header.chunksLeft);
+        } while (!header.isFinalChunk && header.chunksLeft > 0);  // LOOP OVER CHUNKS IN FILE
 
         file.close();
 
