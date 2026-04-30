@@ -9,6 +9,6 @@
 namespace Image {
 
 void init();
-void postProcess(std::string fileName, size_t fileSize);
+void postProcess(std::string fileName, const std::vector<uint8_t> &buffer);
 
 }  // namespace Image

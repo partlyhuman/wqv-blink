@@ -1,7 +1,6 @@
 #include "image.h"
 
 #include <FFat.h>
-#include <PSRamFS.h>
 
 #include <cstring>
 #include <ctime>
@@ -41,16 +40,12 @@ std::string trimTrailingSpaces(std::string src) {
     return src.substr(0, src.find_last_not_of(' ') + 1);
 }
 
-std::pair<std::string, Timestamp> getMetaFromJpegMarker(fs::File src) {
+std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t> data) {
     try {
         // Let's make things easy on ourselves and assume the marker is in the first 512 bytes of the file
-        char headerBuffer[512];
-        if (!src) throw std::runtime_error("Couldn't find file");
-        src.seek(0);
-        size_t bytesRead = src.readBytes(headerBuffer, sizeof(headerBuffer));
-        src.seek(0);
-
-        std::span header(headerBuffer, headerBuffer + bytesRead);
+        // Easier to use as char here
+        std::span<const char> header(reinterpret_cast<const char *>(data.data()),
+                                     min(data.size(), static_cast<size_t>(512)));
         auto iter = header.begin();
 
         if (iter[0] != 0xff || iter[1] != 0xd8) throw std::runtime_error("Invalid SOI");
@@ -97,41 +92,16 @@ std::pair<std::string, Timestamp> getMetaFromJpegMarker(fs::File src) {
     return {};
 }
 
-bool saveToFlash(fs::File src, std::string destPath, size_t size) {
+bool saveToFlash(std::span<const uint8_t> data, std::string destPath) {
     auto startTime = millis();
-    // Keep in mind most files are ~4kb
-    const size_t COPY_BUFFER_SIZE = 1024;
-    static uint8_t buffer[COPY_BUFFER_SIZE];
-
     File dst = FFat.open(destPath.c_str(), "w");
-    if (!dst) return false;
-
-    // preallocate
-    // size_t size = src.size(); // doesn't work on PSRAMFS, use passed size
-    LOGD(TAG, "Preallocating copied file to %d bytes", size);
-    dst.seek(size - 1);
-    dst.write((uint8_t)0);
-    dst.seek(0);
-
-    // Buffered copy
-    src.seek(0);
-
-    while (true) {
-        size_t n = src.read(buffer, sizeof(buffer));
-        if (n == 0) break;
-
-        size_t written = dst.write(buffer, n);
-        if (written != n) {
-            LOGE(TAG, "Write error");
-            dst.close();
-            return false;
-        }
+    if (!dst) {
+        LOGE(TAG, "Couldn't open file for writing: %s", destPath.c_str());
+        return false;
     }
-
+    dst.write(data.data(), data.size());
     dst.close();
-
     LOGD(TAG, "Copied file in %d ms", millis() - startTime);
-
     return true;
 }
 
@@ -157,19 +127,10 @@ std::string getBaseFilename(const Timestamp t) {
     return "WQV" + basepath + "_" + pad2(count + 1);
 }
 
-void postProcess(std::string fileName, size_t fileSize) {
+void postProcess(std::string fileName, const std::vector<uint8_t> &data) {
     std::string dir = "/";
 
-    // Reopen in read mode, PSRAMFS doesn't handle RW mode well, but that's fine
-    // Hones
-    std::string upfPath = dir + fileName;
-    fs::File src = PSRamFS.open(upfPath.c_str(), "r");
-    if (!src) {
-        LOGE(TAG, "Couldn't open path '%s'", upfPath.c_str());
-        return;
-    }
-
-    auto meta = getMetaFromJpegMarker(src);
+    auto meta = getMetaFromJpegMarker(data);
 
     Timestamp timestamp = meta.second;
     std::string base = getBaseFilename(timestamp);
@@ -185,13 +146,7 @@ void postProcess(std::string fileName, size_t fileSize) {
         file.close();
     }
 
-    if (saveToFlash(src, dir + base + ".jpg", fileSize)) {
-        src.close();
-        LOGD(TAG, "Copied to flash, removing PSRAM copy");
-        PSRamFS.remove(upfPath.c_str());
-    } else {
-        src.close();
-    }
+    saveToFlash(data, dir + base + ".jpg");
 }
 
 }  // namespace Image

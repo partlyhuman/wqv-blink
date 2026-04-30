@@ -2,7 +2,6 @@
 
 #include <cstring>
 
-#include "PSRamFS.h"
 #include "chunk.h"
 #include "config.h"
 #include "display.h"
@@ -13,9 +12,6 @@
 #include "msc.h"
 #include "stl_helpers.h"
 #include "types.h"
-
-// TODO undo this
-using namespace Frame;
 
 static const char *TAG = "Main";
 
@@ -60,7 +56,6 @@ void setup() {
 
     pinMode(PIN_LED, OUTPUT);
 
-    PSRamFS.begin(true);
     Image::init();
     MassStorage::init();
     Display::init();
@@ -132,7 +127,7 @@ bool readFrame(unsigned long timeout = 1000) {
     dataLen = 0;
 
     IRDA.setTimeout(timeout);
-    len = IRDA.readBytesUntil(FRAME_EOF, readBuffer, BUFFER_SIZE);
+    len = IRDA.readBytesUntil(Frame::FRAME_EOF, readBuffer, BUFFER_SIZE);
     if (len == 0) {
         LOGW(TAG, "Timeout...");
         return false;
@@ -141,7 +136,7 @@ bool readFrame(unsigned long timeout = 1000) {
         LOGE(TAG, "Filled buffer up all the way, probably dropping content");
         return false;
     }
-    bool parseOk = parseFrame(readBuffer, len, dataLen, port, seq);
+    bool parseOk = Frame::parseFrame(readBuffer, len, dataLen, port, seq);
     if (!parseOk) {
         LOGW(TAG, "Malformed");
         return false;
@@ -163,7 +158,7 @@ bool openSession() {
     auto send = concat(IRDA_STACK_CMD, IRDA_RAND_STR, PAD4, std::array<uint8_t, 3>{0x01, 0x00, 0x00});
     for (uint8_t count = 0; count < 6; count++) {
         send[send.size() - 2] = count;
-        writeFrame(0xff, 0x3f, send, 11);
+        Frame::writeFrame(0xff, 0x3f, send, 11);
         if (readFrame(25) && expect(0xfe, 0xbf, 1)) break;
     }
 
@@ -198,7 +193,7 @@ bool openSession() {
     // ACTUALLY it seems like maybe the reply is dependent on what seq we send??? > 93 < 73
     // > 23 no reply
     // But we actually did start earlier with 3f but the logs all really start that way
-    writeFrame(0xff, 0x93, send, 5);
+    Frame::writeFrame(0xff, 0x93, send, 5);
     if (!readFrame()) return false;
     LOGI(TAG, "Watch accepted SIP port %02x and replied with seq %02x", watchPort, seq);
 
@@ -209,13 +204,13 @@ bool openSession() {
     seq_lower = 0;
 
     static const uint8_t SESSION_INIT_BEGIN[]{0x80, 0x03, 0x01, 0x00};
-    writeFrame(ourPort, makeseq(SEQ_DATA), SESSION_INIT_BEGIN);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA), SESSION_INIT_BEGIN);
     // Expect an 83 back
     if (!readFrame()) return false;
 
     // 0x80030201 -- let's negotiate a session?
     const uint8_t SESSION_INIT[]{0x80, 0x03, 0x02, 0x01};
-    writeFrame(ourPort, makeseq(SEQ_DATA, true, true), SESSION_INIT);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, true, true), SESSION_INIT);
     // Expect ACK
     if (!(readFrame() && expectAck())) return false;
 
@@ -224,14 +219,14 @@ bool openSession() {
 
     // 0x830401000E -- assign session 04
     const uint8_t SESSION_IDENT[]{0x83, session, 0x01, 0x00, 0x0E};
-    writeFrame(ourPort, makeseq(SEQ_DATA, false, true), SESSION_IDENT);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, false, true), SESSION_IDENT);
     // Expect  0x8403810001 (first byte = 0x80 | session)
     if (!readFrame()) return false;
 
     LOGI(TAG, "Confirmed session id %02x by %02x", session, readBuffer[1]);
 
     // > 0xB1
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
     // expect ack
     if (!readFrame()) return false;
 
@@ -239,8 +234,8 @@ bool openSession() {
 
     // TODO we can't reverse roles after going into this state?
     // // Is 0x7d sometimes there and sometimes not??? // 0x7d is escape so this can't be right without a subsequent
-    // byte const uint8_t SESSION_INIT_END[]{0x80, 0x03, 0x01, 0x00, 0x7D}; writeFrame(ourPort, makeseq(SEQ_DATA, true,
-    // true), SESSION_INIT_END); if (!readFrame()) return false;
+    // byte const uint8_t SESSION_INIT_END[]{0x80, 0x03, 0x01, 0x00, 0x7D}; Frame::writeFrame(ourPort, makeseq(SEQ_DATA,
+    // true, true), SESSION_INIT_END); if (!readFrame()) return false;
 
     return true;
 }
@@ -259,7 +254,7 @@ void ackLoopInClientRole(unsigned long timeout = 2000) {
         if (!ok || (port == watchPort && dataLen == 0 && (seq & 0xf) == 1)) {
             // LOGD(TAG, "yeah, it's ack, we'll ack now");
             // ACK, we'll reply ACK
-            writeFrame(ourPort, makeseq(SEQ_ACK, false, false));
+            Frame::writeFrame(ourPort, makeseq(SEQ_ACK, false, false));
         } else {
             // LOGD(TAG, "it's not, done");
             return;
@@ -294,7 +289,7 @@ bool openSessionInClientRole() {
     for (int i = 1; i <= 4; i++) {
         IRDA_HI[i] = esp_random() & ~0b11000001;
     }
-    writeFrame(ourPort, 0xbf, IRDA_HI);
+    Frame::writeFrame(ourPort, 0xbf, IRDA_HI);
 
     do {
         // < 0x3F 0x01193666BEFFFFFFFF010100
@@ -322,7 +317,7 @@ bool openSessionInClientRole() {
     constexpr uint8_t CONNECT_STR[]{0x0e, 0x03, 0x00, 0x00, 0x19, 0x36, 0x66, 0xbe, 0x01, 0x01,
                                     0x02, 0x82, 0x01, 0x01, 0x83, 0x01, 0x3f, 0x84, 0x01, 0x0f,
                                     0x85, 0x01, 0x80, 0x86, 0x02, 0x80, 0x03, 0x08, 0x01, 0x04};
-    writeFrame(ourPort, 0x73, CONNECT_STR);
+    Frame::writeFrame(ourPort, 0x73, CONNECT_STR);
 
     ackLoopInClientRole();
 
@@ -330,7 +325,7 @@ bool openSessionInClientRole() {
     // readFrame(); // ackLoop returned because this was already in the buffer
     // > 0x30 0x81008100
     constexpr uint8_t SESSION_INIT_0[]{0x81, 0x00, 0x81, 0x00};
-    writeFrame(ourPort, makeseq(SEQ_DATA, true, false), SESSION_INIT_0);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, true, false), SESSION_INIT_0);
 
     // Lots of IRDA garbage who cares
     // < 0x32 0x0001840B497244413A4972434F4D4D13497244413A54696E7954503A4C73617053656C
@@ -338,7 +333,7 @@ bool openSessionInClientRole() {
     // if (dataLen > 0 && readBuffer[0] == 0 && readBuffer[1] == 0x01) {
     constexpr uint8_t IRDA_NEGOTIATE_0[]{0x01, 0x00, 0x84, 0x00, 0x00, 0x01, 0x00, 0x05, 0x01, 0x00, 0x00, 0x00, 0x09};
     // > 0x52 0x01008400000100050100000009
-    writeFrame(ourPort, makeseq(SEQ_DATA, true, true), IRDA_NEGOTIATE_0);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, true, true), IRDA_NEGOTIATE_0);
     // }
 
     // < 0x54 0x0001840B497244413A4972434F4D4D0A506172616D65746572737D
@@ -347,7 +342,7 @@ bool openSessionInClientRole() {
     // > 0x74 0x0100840000010005020006000106010101
     constexpr uint8_t IRDA_NEGOTIATE_1[]{0x01, 0x00, 0x84, 0x00, 0x00, 0x01, 0x00, 0x05, 0x02,
                                          0x00, 0x06, 0x00, 0x01, 0x06, 0x01, 0x01, 0x01};
-    writeFrame(ourPort, makeseq(SEQ_DATA, true, true), IRDA_NEGOTIATE_1);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, true, true), IRDA_NEGOTIATE_1);
 
     // < 0x76 0x8903010001
     readFrame();
@@ -360,17 +355,17 @@ bool openSessionInClientRole() {
     }
     // > 0x96 0x830981000E
     uint8_t SESSION_CONFIRM[]{0x83, session, 0x81, 0x00, 0x0e};
-    writeFrame(ourPort, makeseq(SEQ_DATA, true, true), SESSION_CONFIRM);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, true, true), SESSION_CONFIRM);
 
     // < 0x98 0x09030003000104
     readFrame();
     // > 0xB1
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
     // < 0x9A 0x0903000C10040000258011010320010C
     readFrame();
     // > 0xD1
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
     // loop while received frame is ack
 
@@ -381,7 +376,7 @@ bool openSessionInClientRole() {
 }
 
 bool ping() {
-    writeFrame(ourPort, makeseq(SEQ_ACK));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK));
     return (readFrame() && expectAck());
 }
 
@@ -389,13 +384,13 @@ bool closeSession() {
     LOGI(TAG, "Closing session...");
     // 0x83 SS 0201
     const uint8_t HANGUP[]{0x83, session, 0x02, 0x01};
-    writeFrame(ourPort, makeseq(SEQ_DATA, false, true), HANGUP);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, false, true), HANGUP);
     readFrame();
-    writeFrame(ourPort, makeseq(SEQ_ACK, false, true));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, false, true));
     readFrame();
-    writeFrame(ourPort, 0x53);
+    Frame::writeFrame(ourPort, 0x53);
     readFrame();  // replies with 73
-    // writeFrame(ourPort, 0x73);
+    // Frame::writeFrame(ourPort, 0x73);
     return true;
 }
 
@@ -405,15 +400,15 @@ bool swapRolesAndCloseSession() {
     // THIS DOES APPEAR TO START A RECONNECT WITH SWAPPED ROLES?
     // > 0x0308000001
     const uint8_t REQUEST_REVERSE_ROLES[]{0x03, session, 0x00, 0x00, 0x01};
-    writeFrame(ourPort, makeseq(SEQ_DATA, false, true), REQUEST_REVERSE_ROLES);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, false, true), REQUEST_REVERSE_ROLES);
     // < 0x0803010C100400002580110103000104
     readFrame();
     // > 0xD1
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
     // < 0x080300000D
     readFrame();
     // > 0xF1
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
     readFrame();
 
     closeSession();
@@ -424,9 +419,9 @@ void page(int pageDir) {
     if (pageDir == 0) return;
     std::array<uint8_t, 5> PAGE_FWD{0x03, session, 0x00, 0x00, 0x02};
     std::array<uint8_t, 5> PAGE_BACK{0x03, session, 0x00, 0x00, 0x03};
-    writeFrame(ourPort, makeseq(SEQ_DATA, false, true), pageDir > 0 ? PAGE_FWD : PAGE_BACK);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, false, true), pageDir > 0 ? PAGE_FWD : PAGE_BACK);
     readFrame();
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
     readFrame();
 }
 
@@ -443,7 +438,7 @@ void sendTime() {
     auto *end = begin + sizeof(Timestamp);
     send.insert(send.end(), begin, end);
 
-    writeFrame(ourPort, 0xBE, send, 5);
+    Frame::writeFrame(ourPort, 0xBE, send, 5);
     if (readFrame() && expect(watchPort, 0x1A)) {
         LOGI(TAG, "Accepted time?");
     }
@@ -498,14 +493,23 @@ std::string getCmdName() {
 bool syncInClientRole() {
     std::vector<uint8_t> response;
     std::span<uint8_t> cmdSpan;
-
-    // NOTE it's important to only do work when the watch is waiting for a reply
+    
+    // NOTE it's important to only do work when the watch is not sending (waiting for our reply)
     readFrame();
+
     LOGI(TAG, "Formatting FatFS...");
     FFat.end();
     FFat.format();
     FFat.begin();
-    writeFrame(ourPort, makeseq(SEQ_ACK, false, false));
+
+    // Previously this was flash, then PSRAM, but largest files ~8kb, and we have minimum 250kb heap free
+    static std::vector<uint8_t> fileBuffer;
+    fileBuffer.clear();
+    fileBuffer.reserve(8192);
+
+    Image::init();
+
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, false, false));
 
     ackLoopInClientRole();
     // < 0x9C
@@ -518,20 +522,20 @@ bool syncInClientRole() {
         return false;
     }
     // TODO could we skip the ack/ack?
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
     if (!(readFrame() && expectAck())) return false;
     uint8_t FW_IDENT[]{0x03, session, 0x00, 0x00, 0x00, 0x11, 0x01, 0x30, 0x10, 0x04, 0x08, 0x00, 0x74, 0x03,
                        0x00, 0x00,    0x00, 0x00, 0x08, 0x00, 0x74, 0x03, 0x10, 0x00, 0x00, 0x00, 0x11, 0x66,
                        0x72, 0x3A,    0x31, 0x0D, 0x0A, 0x69, 0x64, 0x3A, 0x4C, 0x49, 0x4E, 0x4B, 0x20, 0x51,
                        0x57, 0x32,    0x34, 0x31, 0x31, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x0D, 0x0A};
-    writeFrame(ourPort, makeseq(SEQ_DATA, false, true), FW_IDENT);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, false, true), FW_IDENT);
 
     // < 0xBE 0x090301
     ackLoopInClientRole();
     if (!expectStartsWith({session, 0x03, 0x01})) return false;
     LOGD(TAG, "<< Yield next object from watch");
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
     // RIMG
     // < 0xB0
@@ -546,13 +550,13 @@ bool syncInClientRole() {
                                         0xF0, 0x03, 0xC4, 0x20, 0x04, 0x01, 0xC4, 0x20, 0x05, 0x00, 0x00, 0x18, 0x00};
     response = cmdToResponse(cmdSpan, 0x20, RIMG_EXTRA_DATA);
     LOGI(TAG, ">> BDY0");
-    writeFrame(ourPort, makeseq(SEQ_DATA, true, true), response);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, true, true), response);
 
     // < 0xBE 0x090301
     ackLoopInClientRole();
     if (!expectStartsWith({session, 0x03, 0x01})) return false;
     LOGD(TAG, "i++ from watch");
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
     // RINF
     // < 0xD4
@@ -564,13 +568,13 @@ bool syncInClientRole() {
     constexpr uint8_t RINF_EXTRA_DATA[]{0x00, 0x00, 0x10, 0xFF, 0xFF, 0x11, 0xFF, 0xFF};
     response = cmdToResponse(cmdSpan, -0x0C, RINF_EXTRA_DATA);
     LOGI(TAG, ">> BDY0");
-    writeFrame(ourPort, makeseq(SEQ_DATA, true, true), response);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, true, true), response);
 
     // < 0xBE 0x090301
     ackLoopInClientRole();
     if (!expectStartsWith({session, 0x03, 0x01})) return false;
     LOGD(TAG, "i++ from watch");
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
     // RCMD
     // < 0xF8
@@ -583,22 +587,22 @@ bool syncInClientRole() {
     constexpr uint8_t RCMD_EXTRA_DATA[]{0x00, 0x00, 0x20, 0x00, 0x01, 0x00, 0x01};
     response = cmdToResponse(cmdSpan, -0x0D, RCMD_EXTRA_DATA);
     LOGI(TAG, ">> BDY0");
-    writeFrame(ourPort, makeseq(SEQ_DATA, true, true), response);
+    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, true, true), response);
 
     // < 0xBE 0x090301
     ackLoopInClientRole();
     if (!expectStartsWith({session, 0x03, 0x01})) return false;
     LOGD(TAG, "i++ from watch");
-    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
     for (size_t fileCount = 0; true; fileCount++) {
         // PSRamFS doesn't implement size() correctly last i checked, we can track
-        size_t fileSize = 0;
+        // size_t fileSize = 0;
 
         ackLoopInClientRole();
         if (expectStartsWith({session, 0x03, 0x00, 0x00, 0x00, 0x30})) {
             LOGI(TAG, "Nothing more to receive! We're done.");
-            writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+            Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
             break;
         } else if (expectStartsWith({session, 0x03, 0x00, 0x00, 0x00, 0x20})) {
             LOGD(TAG, "READY FOR NEXT FILE!");
@@ -614,10 +618,9 @@ bool syncInClientRole() {
         std::string fileCmdName = std::string(reinterpret_cast<const char *>(readBuffer + 0x42), 4);
         std::string fileName = std::string(reinterpret_cast<const char *>(readBuffer + 0x4C), 12);
         LOGI(TAG, "<< %s saving to %s", fileCmdName.c_str(), fileName.c_str());
-        File file = PSRamFS.open(("/" + fileName).c_str(), "w", true);
         // We'll use this later in the RDY0 response
         uint8_t cmdFil0Seq = readBuffer[0x31];
-        writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+        Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
         readFrame();
         if (!expectStartsWith({session, 0x03, 0x00, 0x00})) return false;
@@ -625,10 +628,9 @@ bool syncInClientRole() {
         auto jpegSpan = Chunk::findJpegRegion(std::span(readBuffer, dataLen));
         if (jpegSpan.size() > 0) {
             LOGI(TAG, "Found beginning of JPEG inside chunk");
-            file.write(jpegSpan.data(), jpegSpan.size());
-            fileSize += jpegSpan.size();
+            fileBuffer.insert(fileBuffer.end(), jpegSpan.begin(), jpegSpan.end());
         }
-        writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+        Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
         uint8_t SESSION_CHUNK_HEADER[]{session, 0x03, 0x00, 0x00};
         Chunk::Header header;
@@ -666,8 +668,7 @@ bool syncInClientRole() {
                     size_t headersSize = sizeof(SESSION_CHUNK_HEADER) + Chunk::HEADER_SIZE;
                     size_t bytes = dataLen - headersSize;
                     chunkBytesReceived += bytes;
-                    file.write(readBuffer + headersSize, bytes);
-                    fileSize += bytes;
+                    fileBuffer.insert(fileBuffer.end(), readBuffer + headersSize, readBuffer + headersSize + bytes);
 
                     LOGD(TAG, "Received %d/%d bytes in chunk, expecting more frames? %s", chunkBytesReceived,
                          header.chunkSize, chunkBytesReceived < header.chunkSize ? "Yes" : "No");
@@ -682,8 +683,7 @@ bool syncInClientRole() {
                     size_t headersSize = sizeof(SESSION_CHUNK_HEADER);
                     size_t bytes = dataLen - headersSize;
                     chunkBytesReceived += bytes;
-                    file.write(readBuffer + headersSize, bytes);
-                    fileSize += bytes;
+                    fileBuffer.insert(fileBuffer.end(), readBuffer + headersSize, readBuffer + headersSize + bytes);
 
                     LOGD(TAG, "Received %d/%d bytes in chunk, expecting more frames? %s", chunkBytesReceived,
                          header.chunkSize, chunkBytesReceived < header.chunkSize ? "Yes" : "No");
@@ -694,9 +694,9 @@ bool syncInClientRole() {
                 if (seq % 0xf > 8) {
                     LOGD(TAG, ">> continue...");
                     uint8_t CONTINUE[]{0x03, session, 0x06};
-                    writeFrame(ourPort, makeseq(SEQ_DATA, true, true), CONTINUE);
+                    Frame::writeFrame(ourPort, makeseq(SEQ_DATA, true, true), CONTINUE);
                 } else {
-                    writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+                    Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
                 }
 
                 frameNum++;
@@ -707,9 +707,9 @@ bool syncInClientRole() {
         } while (!header.isFinalChunk);  // END LOOP OVER CHUNKS IN FILE
 
         LOGI(TAG, "File '%s' done!", fileName.c_str());
-        file.close();
 
-        Image::postProcess(fileName, fileSize);
+        Image::postProcess(fileName, fileBuffer);
+        fileBuffer.clear();
 
         // RPL0
         if (!(readFrame() && expectAck())) return false;
@@ -719,12 +719,12 @@ bool syncInClientRole() {
                            0x00, 0x01,    0x52, 0x50, 0x4C, 0x30, 0x00, 0x00, 0x00, 0x0E, 0x01, 0x00, 0x00, 0x00,
                            0x00, 0x00,    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
         std::memcpy(RPL0_CMD + 0x36, fileName.data(), 12);
-        writeFrame(ourPort, makeseq(SEQ_DATA, false, true), RPL0_CMD);
+        Frame::writeFrame(ourPort, makeseq(SEQ_DATA, false, true), RPL0_CMD);
 
         ackLoopInClientRole();
         if (expectStartsWith({session, 0x03, 0x01})) {
             LOGD(TAG, "i++ from watch");
-            writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
+            Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
         } else {
             return false;
         }
