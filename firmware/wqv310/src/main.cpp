@@ -2,6 +2,7 @@
 
 #include <cstring>
 
+#include "PSRamFS.h"
 #include "chunk.h"
 #include "config.h"
 #include "display.h"
@@ -12,9 +13,6 @@
 #include "meta.h"
 #include "msc.h"
 #include "stl_helpers.h"
-#ifdef ENABLE_PSRAM
-#include "PSRamFS.h"
-#endif
 
 // TODO undo this
 using namespace Frame;
@@ -62,8 +60,7 @@ void setup() {
 
     pinMode(PIN_LED, OUTPUT);
 
-    // No PSRAM needed - write JPGs straight to FS
-
+    PSRamFS.begin(true);
     MassStorage::init();
     Image::init();
     Display::init();
@@ -593,10 +590,11 @@ bool syncInClientRole() {
     if (!expectStartsWith({session, 0x03, 0x01})) return false;
     LOGD(TAG, "i++ from watch");
     writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
-    // TODO remove this check from the bottom of the loop and move this to the top of the loop. Once we know what ends
-    // it.
 
     for (size_t fileCount = 0; true; fileCount++) {
+        // PSRamFS doesn't implement size() correctly last i checked, we can track
+        size_t fileSize = 0;
+
         ackLoopInClientRole();
         if (expectStartsWith({session, 0x03, 0x00, 0x00, 0x00, 0x30})) {
             LOGI(TAG, "Nothing more to receive! We're done.");
@@ -616,7 +614,7 @@ bool syncInClientRole() {
         std::string fileCmdName = std::string(reinterpret_cast<const char *>(readBuffer + 0x42), 4);
         std::string fileName = std::string(reinterpret_cast<const char *>(readBuffer + 0x4C), 12);
         LOGI(TAG, "<< %s saving to %s", fileCmdName.c_str(), fileName.c_str());
-        File file = FFat.open(("/" + fileName).c_str(), "w", true);
+        File file = PSRamFS.open(("/" + fileName).c_str(), "w", true);
         // We'll use this later in the RDY0 response
         uint8_t cmdFil0Seq = readBuffer[0x31];
         writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
@@ -628,6 +626,7 @@ bool syncInClientRole() {
         if (jpegSpan.size() > 0) {
             LOGI(TAG, "Found beginning of JPEG inside chunk");
             file.write(jpegSpan.data(), jpegSpan.size());
+            fileSize += jpegSpan.size();
         }
         writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
@@ -668,6 +667,7 @@ bool syncInClientRole() {
                     size_t bytes = dataLen - headersSize;
                     chunkBytesReceived += bytes;
                     file.write(readBuffer + headersSize, bytes);
+                    fileSize += bytes;
 
                     LOGD(TAG, "Received %d/%d bytes in chunk, expecting more frames? %s", chunkBytesReceived,
                          header.chunkSize, chunkBytesReceived < header.chunkSize ? "Yes" : "No");
@@ -683,6 +683,7 @@ bool syncInClientRole() {
                     size_t bytes = dataLen - headersSize;
                     chunkBytesReceived += bytes;
                     file.write(readBuffer + headersSize, bytes);
+                    fileSize += bytes;
 
                     LOGD(TAG, "Received %d/%d bytes in chunk, expecting more frames? %s", chunkBytesReceived,
                          header.chunkSize, chunkBytesReceived < header.chunkSize ? "Yes" : "No");
@@ -708,7 +709,7 @@ bool syncInClientRole() {
         LOGI(TAG, "File '%s' done!", fileName.c_str());
         file.close();
 
-        Meta::postProcess(fileName);
+        Meta::postProcess(fileName, fileSize);
 
         // RPL0
         if (!(readFrame() && expectAck())) return false;

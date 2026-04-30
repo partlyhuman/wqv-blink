@@ -18,6 +18,6 @@ struct __attribute__((packed)) Timestamp {
 
 std::string trimTrailingSpaces(std::string src);
 
-void postProcess(std::string fileName);
+void postProcess(std::string fileName, size_t fileSize);
 
 }  // namespace Meta

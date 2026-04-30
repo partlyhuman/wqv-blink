@@ -1,6 +1,7 @@
 #include "meta.h"
 
 #include <FFat.h>
+#include <PSRamFS.h>
 
 #include <cstring>
 #include <ctime>
@@ -32,15 +33,14 @@ std::string trimTrailingSpaces(std::string src) {
     return src.substr(0, src.find_last_not_of(' ') + 1);
 }
 
-std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::string path) {
+std::pair<std::string, Timestamp> getMetaFromJpegMarker(fs::File src) {
     try {
         // Let's make things easy on ourselves and assume the marker is in the first 512 bytes of the file
         char headerBuffer[512];
-
-        auto jpegFile = FFat.open(path.c_str(), "r");
-        if (!jpegFile) throw std::runtime_error("Couldn't find file");
-        size_t bytesRead = jpegFile.readBytes(headerBuffer, sizeof(headerBuffer));
-        jpegFile.close();
+        if (!src) throw std::runtime_error("Couldn't find file");
+        src.seek(0);
+        size_t bytesRead = src.readBytes(headerBuffer, sizeof(headerBuffer));
+        src.seek(0);
 
         std::span header(headerBuffer, headerBuffer + bytesRead);
         auto iter = header.begin();
@@ -89,9 +89,49 @@ std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::string path) {
     return {};
 }
 
-void postProcess(std::string fileName) {
+bool copyRename(fs::File src, std::string destPath, size_t size) {
+    auto startTime = millis();
+
+    File dst = FFat.open(destPath.c_str(), "w");
+    if (!dst) return false;
+
+    // preallocate
+    // size_t size = src.size(); // doesn't work on PSRAMFS, use passed size
+    LOGD(TAG, "Preallocating copied file to %d bytes", size);
+    dst.seek(size - 1);
+    dst.write((uint8_t)0);
+    dst.seek(0);
+
+    // Buffered copy
+    src.seek(0);
+    static uint8_t buffer[4096];
+    while (true) {
+        size_t n = src.read(buffer, sizeof(buffer));
+        if (n == 0) break;
+
+        size_t written = dst.write(buffer, n);
+        if (written != n) {
+            LOGE(TAG, "Write error");
+            dst.close();
+            return false;
+        }
+    }
+
+    dst.close();
+
+    LOGD(TAG, "Copied file in %d ms", millis() - startTime);
+
+    return true;
+}
+
+void postProcess(std::string fileName, size_t fileSize) {
     std::string dir = "/";
-    auto meta = getMetaFromJpegMarker(dir + fileName);
+
+    // Reopen in read mode - I don't think rw mode worked, but actually TODO let me verify that
+    fs::File src = PSRamFS.open((dir + fileName).c_str(), "r");
+    if (!src) return;
+
+    auto meta = getMetaFromJpegMarker(src);
 
     time_t time = timestampToTime(meta.second);
     setSystemTime(time);
@@ -99,7 +139,7 @@ void postProcess(std::string fileName) {
     LOGI(TAG, "File %s has metadata time=%s title='%s'", fileName.c_str(), std::ctime(&time), meta.first.c_str());
 
     // TODO make a new filename using the timestamp
-    std::string base = fileName;
+    std::string base = fileName.substr(0, fileName.size() - 4);
 
     if (meta.first.size() > 0) {
         auto file = FFat.open((dir + base + ".txt").c_str(), "w", true);
@@ -107,10 +147,12 @@ void postProcess(std::string fileName) {
         file.close();
     }
 
-    // rename to new filename -- to apply a new creation date, we'll probably need to make a copy, ugh
-    // auto file = FFat.open((dir + fileName).c_str(), "a"); // Touch won't do it
-    // file.close();
-    FFat.rename((dir + fileName).c_str(), ("/" + base + ".jpg").c_str());
+    // TODO because we now have to make a copy, let's in fact use PSRAMFS!!
+    if (copyRename(src, dir + base + ".jpg", fileSize)) {
+        src.close();
+        LOGD(TAG, "Copied to flash, removing PSRAM copy");
+        PSRamFS.remove((dir + fileName).c_str());
+    }
 }
 
 }  // namespace Meta
