@@ -405,7 +405,13 @@ bool swapRolesAndCloseSession() {
     LOGI(TAG, "Ending session and swapping roles");
 
     // > 0x0308000001
-    Frame::writeFrame(ourPort, seq(SEQ_DATA, false, true), S(CMD_SWAP_ROLES));
+    if (model == 3) {
+        Frame::writeFrame(ourPort, seq(SEQ_DATA, false, true), S(CMD_SWAP_ROLES_3));
+    } else if (model == 10) {
+        Frame::writeFrame(ourPort, seq(SEQ_DATA, false, true), S(CMD_SWAP_ROLES_10));
+    } else {
+        return false;
+    }
     // < 0x0803010C100400002580110103000104
     Frame::readFrame();
 
