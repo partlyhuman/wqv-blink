@@ -81,6 +81,7 @@ void setup() {
     LOGI(TAG, "Setup complete");
 
     delay(2500);
+    buttonPressed = false;  // ignore any button presses during boot
 }
 
 /**

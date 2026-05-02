@@ -276,7 +276,7 @@ void showConnectingScreen(int offset) {
     if (scroll) startScroll();
 }
 
-void showProgressScreen(size_t chunkNumber, size_t totalChunks, size_t imageNumber) {
+void showProgressScreen(float progress, size_t imageNumber) {
     screen = 2;
     scroll = false;
     statusString = "DOWNLOADING";
@@ -289,20 +289,20 @@ void showProgressScreen(size_t chunkNumber, size_t totalChunks, size_t imageNumb
     display.drawRect(1, 38, 125, 9, 1);
 
     // bar_fill
-    display.fillRect(3, 40, chunkNumber * 121 / totalChunks, 5, 1);
+    display.fillRect(3, 40, round(progress * 121), 5, 1);
 
     // percent
     display.setTextColor(1);
     display.setCursor(1, 35);
-    display.printf("%0.0f%%", 100.0f * chunkNumber / totalChunks);
+    display.printf("%0.0f%%", 100.0f * progress);
 
     // photo_count
     display.setFont(&Nokia_Cellphone_FC_8);
-    display.setCursor(46, 14);
+    display.setCursor(57, 14);
     display.printf("Photo %d", imageNumber + 1);
 
     // frame0
-    display.drawBitmap(23, 4, frames[(frame++) % 5], 14, 14, 1);
+    display.drawBitmap(34, 4, frames[(frame++) % 5], 14, 14, 1);
 
     drawBar();
     display.display();

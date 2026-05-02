@@ -81,7 +81,7 @@ std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t>
             if (isAscii) {
                 title = trimTrailingSpaces(std::string(payload, strLen));
             }
-            return std::pair(title, timestamp);
+            return {title, timestamp};
         }
 
         LOGE(TAG, "Couldn't find APP2 marker in JPEG, no metadata");

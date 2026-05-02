@@ -58,7 +58,7 @@ std::span<const uint8_t> findJpegRegion(std::span<const uint8_t> raw) {
         LOGE(TAG, "Expected to find the JPEG start marker");
         return {};
     }
-    return std::span<const uint8_t>(it, raw.end());
+    return std::span(it, raw.end());
 }
 
 }  // namespace Chunk

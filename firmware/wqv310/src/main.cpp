@@ -79,6 +79,7 @@ void setup() {
     digitalWrite(PIN_LED, LED_OFF);
     LOGI(TAG, "Setup complete");
     delay(2500);
+    buttonPressed = false;  // ignore any button presses during boot
 }
 
 /**
@@ -563,6 +564,7 @@ bool syncInClientRole() {
         auto [fileName, rpl0] = makeFilRplResponse(frame.data, session);
         auto fileCmdName = Frame::extractString(frame, 0x42, 4);
         LOGI(TAG, "<< %s saving to %s", fileCmdName.c_str(), fileName.c_str());
+        Display::showProgressScreen(0, fileCount);
         Frame::writeFrame(ourPort, makeseq(SEQ_ACK, true, false));
 
         frame = Frame::readFrame();
@@ -605,7 +607,6 @@ bool syncInClientRole() {
                     LOGD(TAG, "First frame, parsed chunk header");
                     header = *maybeHeader;
 
-                    Display::showProgressScreen(header.chunkNumber, header.chunkNumber + header.chunksLeft, fileCount);
                     LOGV(TAG, "Chunk %02d/%02d, %02d remain", header.chunkNumber,
                          header.chunkNumber + header.chunksLeft, header.chunksLeft);
 
@@ -620,6 +621,11 @@ bool syncInClientRole() {
                     chunkBytesReceived += chunkData.size();
                     fileBuffer.insert(fileBuffer.end(), chunkData.begin(), chunkData.end());
                 }
+
+                Display::showProgressScreen(
+                    (header.chunkNumber - 1.0f + ((float)chunkBytesReceived / header.chunkSize)) /
+                        (header.chunkNumber + header.chunksLeft),
+                    fileCount);
 
                 LOGD(TAG, "Received %d/%d bytes in chunk, expecting more frames? %s", chunkBytesReceived,
                      header.chunkSize, chunkBytesReceived < header.chunkSize ? "Yes" : "No");
@@ -643,6 +649,7 @@ bool syncInClientRole() {
 
         LOGI(TAG, "File '%s' done!", fileName.c_str());
 
+        Display::showProgressScreen(1, fileCount);
         Image::postProcess(fileName, fileBuffer);
         fileBuffer.clear();
 

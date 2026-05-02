@@ -71,7 +71,7 @@ std::pair<std::string, std::vector<uint8_t>> makeFilRplResponse(std::span<const 
     auto fileNameSpan = src.subspan(0x4C, 12);
     std::memcpy(reply.data() + 0x36, fileNameSpan.data(), fileNameSpan.size());
     std::string fileName(reinterpret_cast<const char *>(fileNameSpan.data()), fileNameSpan.size());
-    return std::pair(fileName, reply);
+    return {fileName, reply};
 }
 
 std::string getCmdName(Frame::Frame frame) {
