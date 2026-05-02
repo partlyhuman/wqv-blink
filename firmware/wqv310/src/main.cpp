@@ -23,7 +23,7 @@ using namespace App;
 
 static const char *TAG = "Main";
 
-static const size_t ABORT_AFTER_RETRIES = 50;
+static const size_t ABORT_AFTER_RETRIES = 10;
 static uint8_t ourPort = 0xff;
 static uint8_t watchPort = 0xff;
 static uint8_t session;
@@ -179,17 +179,15 @@ bool openSession() {
     if (watchIdString == "CASIO WIC 2411/IR") {
         model = 3;
         Display::setModel(model);
-        Display::showConnectingScreen(0);
-        LOGI(TAG, "WQV-3 mode!");
     } else if (watchIdString == "CASIO WIC 2412/IR") {
         model = 10;
         Display::setModel(model);
-        Display::showConnectingScreen(0);
-        LOGI(TAG, "WQV-10 MODE!");
     } else {
         LOGI(TAG, "Unrecognized watch");
         return false;
     }
+
+    Display::showConnectingScreen(0);
 
     std::array<uint8_t, 27> START_SESSION{0x19, 0x36, 0x66, 0xBE, watchPort, 0x01, 0x01, 0x02, 0x82,
                                           0x01, 0x01, 0x83, 0x01, 0x3F,      0x84, 0x01, 0x0F, 0x85,
@@ -246,7 +244,7 @@ bool openSession() {
 }
 
 Frame::Frame readAckUntilDataFrame(unsigned long timeout = 2000) {
-    while (true) {
+    for (int i = 0; i < ABORT_AFTER_RETRIES; i++) {
         frame = Frame::readFrame();
 
         // Try again
@@ -254,7 +252,7 @@ Frame::Frame readAckUntilDataFrame(unsigned long timeout = 2000) {
 
         if (frame.seq == 0x53) {
             LOGE(TAG, "Error status");
-            return frame;
+            continue;
         }
 
         if (frame.port == watchPort && frame.data.size() == 0 && (frame.seq & 0xf) == 1) {
@@ -262,9 +260,10 @@ Frame::Frame readAckUntilDataFrame(unsigned long timeout = 2000) {
             Frame::writeFrame(ourPort, seq());
         } else {
             // Let the caller resume with the data still in place
-            return frame;
+            break;
         }
     }
+    return frame;
 }
 
 bool openSessionInClientRole() {
@@ -448,8 +447,6 @@ void sendTime(Timestamp time) {
 }
 
 bool syncInClientRole() {
-    std::vector<uint8_t> response;
-
     // NOTE it's important to only do work when the watch is not sending (waiting for our reply)
     frame = Frame::readFrame();
 
@@ -498,15 +495,13 @@ bool syncInClientRole() {
     // < 0xB0
     // 0x09030000002003FF003E107DE1003A580000000034080074031000000008007403000000000008000800800002434D4430000000060000000100405748543000000006010052494D47
     frame = readAckUntilDataFrame();
-    LOGI(TAG, "<< %s (expecting RIMG)", getCmdName(frame).c_str());
-    // RIMG / +0x20 / 52 bytes extra data
-    constexpr uint8_t RIMG_EXTRA_DATA[]{0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x08, 0x00, 0x06, 0x00, 0x02, 0x07, 0x08,
-                                        0x00, 0x06, 0x00, 0x06, 0x40, 0x04, 0xB0, 0x05, 0x00, 0x03, 0xC0, 0x04, 0x00,
-                                        0x03, 0x00, 0x03, 0x20, 0x02, 0x58, 0x02, 0x80, 0x01, 0xE0, 0x01, 0x40, 0x00,
-                                        0xF0, 0x03, 0xC4, 0x20, 0x04, 0x01, 0xC4, 0x20, 0x05, 0x00, 0x00, 0x18, 0x00};
-    LOGI(TAG, ">> BDY0");
-    response = makeResponse(frame.data.subspan(0, 44), session, 0x20, RIMG_EXTRA_DATA);
-    Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), response);
+    if (getCmdName(frame) != "RIMG") {
+        LOGE(TAG, "Wrong command, expecting RIMG");
+        return false;
+    }
+    LOGD(TAG, "<< RIMG");
+    LOGD(TAG, ">> BDY0");
+    Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), makeResponse(frame));
 
     // < 0xBE 0x090301
     frame = readAckUntilDataFrame();
@@ -518,12 +513,13 @@ bool syncInClientRole() {
     // < 0xD4
     // 0x09030000002003FF003E107DE1003A580000000034080074031000000008007403000000000008000800810002434D4430000000060000000100405748543000000006010052494E46
     frame = readAckUntilDataFrame();
-    LOGI(TAG, "<< %s (expecting RINF)", getCmdName(frame).c_str());
-    // RINF / -0x0C / 8 bytes extra data
-    constexpr uint8_t RINF_EXTRA_DATA[]{0x00, 0x00, 0x10, 0xFF, 0xFF, 0x11, 0xFF, 0xFF};
-    LOGI(TAG, ">> BDY0");
-    response = makeResponse(frame.data.subspan(0, 44), session, -0x0C, RINF_EXTRA_DATA);
-    Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), response);
+    if (getCmdName(frame) != "RINF") {
+        LOGE(TAG, "Wrong command, expecting RINF");
+        return false;
+    }
+    LOGD(TAG, "<< RINF");
+    LOGD(TAG, ">> BDY0");
+    Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), makeResponse(frame));
 
     // < 0xBE 0x090301
     frame = readAckUntilDataFrame();
@@ -535,13 +531,13 @@ bool syncInClientRole() {
     // < 0xF8
     // 0x09030000002003FF003E107DE1003A580000000034080074031000000008007403000000000008000800820002434D4430000000060000000100405748543000000006010052434D44
     frame = readAckUntilDataFrame();
-    LOGI(TAG, "<< %s (expecting RCMD)", getCmdName(frame).c_str());
-    // RCMD / -0x0D / 7 bytes extra data
-    // NOTE i removed an extra unaccounted for 0xc4 off the end of this.
-    constexpr uint8_t RCMD_EXTRA_DATA[]{0x00, 0x00, 0x20, 0x00, 0x01, 0x00, 0x01};
-    LOGI(TAG, ">> BDY0");
-    response = makeResponse(frame.data.subspan(0, 44), session, -0x0D, RCMD_EXTRA_DATA);
-    Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), response);
+    if (getCmdName(frame) != "RCMD") {
+        LOGE(TAG, "Wrong command, expecting RCMD");
+        return false;
+    }
+    LOGD(TAG, "<< RCMD");
+    LOGD(TAG, ">> BDY0");
+    Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), makeResponse(frame));
 
     // < 0xBE 0x090301
     frame = readAckUntilDataFrame();
@@ -570,7 +566,7 @@ bool syncInClientRole() {
 
         // FIL0
         // We have to send the RDY0 much later, so let's create it now instead of holding onto the FIL0
-        auto [fileName, rpl0] = makeFilRplResponse(frame.data, session);
+        auto [fileName, rpl0] = makeFilRplResponse(frame);
         auto fileCmdName = Frame::extractString(frame, 0x42, 4);
         LOGI(TAG, "<< %s saving to %s", fileCmdName.c_str(), fileName.c_str());
         Display::showProgressScreen(0, fileCount);
@@ -612,8 +608,6 @@ bool syncInClientRole() {
                         LOGE(TAG, "Chunk header not found");
                         return false;
                     }
-
-                    LOGD(TAG, "First frame, parsed chunk header");
                     header = *maybeHeader;
 
                     LOGV(TAG, "Chunk %02d/%02d, %02d remain", header.chunkNumber,
@@ -636,13 +630,13 @@ bool syncInClientRole() {
                         (header.chunkNumber + header.chunksLeft),
                     fileCount);
 
-                LOGD(TAG, "Received %d/%d bytes in chunk, expecting more frames? %s", chunkBytesReceived,
+                LOGV(TAG, "Received %d/%d bytes in chunk, expecting more frames? %s", chunkBytesReceived,
                      header.chunkSize, chunkBytesReceived < header.chunkSize ? "Yes" : "No");
 
                 // Periodically send "Continue", otherwise normal ACK
                 // arbitrary loop point
                 if (frame.seq % 0xf > 8) {
-                    LOGD(TAG, ">> continue...");
+                    LOGV(TAG, ">> continue...");
                     uint8_t CONTINUE[]{0x03, session, 0x06};
                     Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), CONTINUE);
                 } else {

@@ -20,7 +20,7 @@
 static const char *TAG = "Main";
 static const char *DUMP_PATH = "/dump.bin";
 
-const size_t ABORT_AFTER_RETRIES = 50;
+const size_t ABORT_AFTER_RETRIES = 10;
 const size_t MAX_IMAGES = 100;
 // Packets seem to be up to 192 bytes
 const size_t BUFFER_SIZE = 256;

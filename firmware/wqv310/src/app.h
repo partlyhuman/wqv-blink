@@ -54,11 +54,10 @@ constexpr uint8_t CLIENT_REPLY_APP_PACKET[]{0x03, SESH, 0x00, 0x00};
 std::span<const uint8_t> fill(std::span<const uint8_t> cmd, uint8_t session);
 
 // Mimics opaque transformations done on client to respond affirmatively to app commands
-std::vector<uint8_t> makeResponse(std::span<const uint8_t> src, uint8_t session, int8_t shifts,
-                                  std::span<const uint8_t> extraData = {});
+std::vector<uint8_t> makeResponse(Frame::Frame frame);
 
 // Given a FIL0 command, returns the filename and a RPL0 response
-std::pair<std::string, std::vector<uint8_t>> makeFilRplResponse(std::span<const uint8_t> src, uint8_t session);
+std::pair<std::string, std::vector<uint8_t>> makeFilRplResponse(Frame::Frame frame);
 
 // For app payloads, get the 4-char command string at the end
 std::string getCmdName(Frame::Frame frame);
