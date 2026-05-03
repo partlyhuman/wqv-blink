@@ -1,0 +1,2 @@
+# Use github releases to distribute binaries, don't check in normally
+*.bin
