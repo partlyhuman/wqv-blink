@@ -5,6 +5,6 @@
 namespace Firmware
 {
 void init();
-void rebootIntoNextPartition();
-void rebootIntoPartition(uint part);
+void rebootIntoNextOtaPartition();
+void rebootIntoOtaPartition(uint part);
 }

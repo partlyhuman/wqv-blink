@@ -14,7 +14,6 @@
 namespace Frame {
 
 static const char *TAG = "Frame";
-static constexpr std::span<const uint8_t> EMPTY{};
 
 static inline void writeEscaped(uint8_t b) {
     if (b == FRAME_BOF || b == FRAME_EOF || b == FRAME_ESC) {
@@ -149,7 +148,6 @@ Frame readFrame(unsigned long timeout) {
     static uint8_t readBuffer[BUFFER_SIZE];
 
     Frame result{};
-    result.data = EMPTY;
 
     uint8_t seq;
     uint8_t port;
@@ -173,7 +171,7 @@ Frame readFrame(unsigned long timeout) {
     if (result.error == FRAME_OK) {
         result.port = port;
         result.seq = seq;
-        result.data = std::span(readBuffer, dataLen);
+        result.data = std::span(readBuffer).subspan(0, dataLen);
     }
     return result;
 }
@@ -190,7 +188,6 @@ std::string extractString(Frame frame, size_t offset, size_t len) {
 
 void log(Frame f) {
     Serial.printf("{ error=%d port=%02x seq=%02x", f.error, f.port, f.seq);
-    Serial.flush();  // in case it crashes here??
     if (!f.data.empty()) {
         Serial.printf(" data=");
         for (const uint8_t b : f.data) Serial.printf("%02x ");
@@ -199,7 +196,9 @@ void log(Frame f) {
 }
 
 Frame errorFrame(ReadError err) {
-    return {.error = err, .port = 0, .seq = 0, .data = EMPTY};
+    Frame f{};
+    f.error = err;
+    return f;
 }
 
 };  // namespace Frame

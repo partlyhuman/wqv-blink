@@ -45,8 +45,6 @@ void setup() {
     Display::showBootScreen();
 
     Serial.begin(115200);
-    // Doing this means it doesn't start until serial connected?
-    // while (!Serial);
 
     pinMode(PIN_LED, OUTPUT);
     digitalWrite(PIN_LED, LED_OFF);
@@ -79,7 +77,6 @@ void setup() {
     while (!IRDA);
 
     LOGI(TAG, "Setup complete");
-
     delay(2500);
     buttonPressed = false;  // ignore any button presses during boot
 }
@@ -113,10 +110,10 @@ static inline bool expect(uint8_t expectedAddr, uint8_t expectedCtrl, int expect
  */
 bool sendRetry(uint8_t a, uint8_t c, const uint8_t *d = nullptr, size_t l = 0, int retries = 5) {
     for (int retry = 0; retry < retries; retry++) {
-        digitalWrite(PIN_LED, LED_OFF);
+        // digitalWrite(PIN_LED, LED_OFF);
         Frame::writeFrame(a, c, d, l);
         // Important: don't do any heavy work here or you'll miss the beginning of the buffer
-        digitalWrite(PIN_LED, LED_ON);
+        // digitalWrite(PIN_LED, LED_ON);
         len = IRDA.readBytesUntil(Frame::FRAME_EOF, readBuffer, BUFFER_SIZE);
 
         if (len <= 0) {

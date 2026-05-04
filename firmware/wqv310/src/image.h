@@ -4,11 +4,10 @@
 
 #include <span>
 #include <string>
-#include <utility>
 
 namespace Image {
 
 void init();
-void postProcess(std::string fileName, const std::vector<uint8_t> &buffer);
+void postProcess(std::string fileName, std::span<const uint8_t> data);
 
 }  // namespace Image

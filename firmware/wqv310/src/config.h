@@ -10,8 +10,8 @@
 #define PIN_LED LED_BUILTIN
 #endif
 
-#define LED_ON LOW
-#define LED_OFF HIGH
+#define LED_ON HIGH
+#define LED_OFF LOW
 
 // Builtin button
 #ifndef PIN_BUTTON

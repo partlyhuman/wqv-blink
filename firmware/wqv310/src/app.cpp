@@ -18,16 +18,16 @@ constexpr uint8_t RIMG_EXTRA_DATA[]{0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x08, 0x
                                     0xF0, 0x03, 0xC4, 0x20, 0x04, 0x01, 0xC4, 0x20, 0x05, 0x00, 0x00, 0x18, 0x00};
 
 std::span<const uint8_t> fill(std::span<const uint8_t> cmd, uint8_t session) {
-    static std::vector<uint8_t> CMD_BUFFER;
-    CMD_BUFFER.reserve(64);
+    static std::vector<uint8_t> CMD_BUFFER(64);
     std::replace_copy(cmd.begin(), cmd.end(), CMD_BUFFER.begin(), SESH, session);
     return std::span(CMD_BUFFER).subspan(0, cmd.size());
 }
 
-// TODO this expects the full frame, but conceptually we should strip off the session header and attach a session header
-// in response
+// NOTE this expects the full frame, as a convenience it also acts on the session header
+// even though that's not part of the application layer
 std::vector<uint8_t> makeResponse(Frame::Frame frame) {
-    if (frame.data.size() < 44) {
+    const size_t CMD_SIZE = 44;
+    if (frame.data.size() < CMD_SIZE) {
         LOGE(TAG, "Size too small to be app command packet");
         return {};
     }
@@ -45,8 +45,8 @@ std::vector<uint8_t> makeResponse(Frame::Frame frame) {
         extraData = RIMG_EXTRA_DATA;
         shifts = 0x20;
     }
-    std::vector<uint8_t> response(frame.data.begin(), frame.data.begin() + 44);
-    response.reserve(44 + 4 + 4 + extraData.size());
+    std::vector<uint8_t> response(frame.data.begin(), frame.data.begin() + CMD_SIZE);
+    response.reserve(response.size() + sizeof(uint32_t) + extraData.size());
     auto src = frame.data;
 
     // 1. First bytes: swap [session] 03 -> 03 [session]

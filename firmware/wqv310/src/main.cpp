@@ -12,12 +12,8 @@
 #include "irda_hal.h"
 #include "log.h"
 #include "msc.h"
-#include "stl_helpers.h"
 #include "types.h"
 
-// Shortcut to fill in the arg with the current session
-// e.g. S(CMD_SET_TIME)
-#define S(arg) App::fill((arg), session)
 // Temp debugging aid
 #define LOGFAIL            \
     {                      \
@@ -33,8 +29,11 @@ static const char *TAG = "Main";
 static const size_t ABORT_AFTER_RETRIES = 10;
 static uint8_t ourPort = 0xff;
 static uint8_t watchPort = 0xff;
-static uint8_t session;
 static int model;
+static uint8_t session;
+// Shortcut to fill in the arg with the current session e.g. S(CMD_SET_TIME)
+#define S(arg) App::fill((arg), session)
+
 static Frame::Frame frame;
 
 enum SequenceType {
@@ -62,10 +61,8 @@ void setup() {
 
     Serial.begin(115200);
 
-    // Doing this means it doesn't start until serial connected?
-    // while (!Serial);
-
     pinMode(PIN_LED, OUTPUT);
+    digitalWrite(PIN_LED, LED_OFF);
 
     Image::init();
     MassStorage::init();
@@ -84,7 +81,6 @@ void setup() {
     IRDA_setup(IRDA);
     while (!IRDA);
 
-    digitalWrite(PIN_LED, LED_OFF);
     LOGI(TAG, "Setup complete");
     delay(2500);
     buttonPressed = false;  // ignore any button presses during boot
@@ -168,18 +164,29 @@ static bool expectExactly(std::span<const uint8_t> cmp) {
     return ret;
 }
 
-bool openSession() {
-    static constexpr std::array<uint8_t, 1> IRDA_STACK_CMD{0x01};
-    static constexpr std::array<uint8_t, 4> PAD4{0xFF, 0xFF, 0xFF, 0xFF};
-    static std::array<uint8_t, 4> IRDA_RAND_STR;
+static bool expectAppPacketWithCommand(const char *expected) {
+    if (!expectStartsWith(S(CLIENT_APP_PACKET))) return false;
+    std::string actual = getCmdName(frame);
+    if (actual != expected) {
+        LOGE(TAG, "Expected command packet with cmd '%s', but received '%s'", expected, actual.c_str());
+        return false;
+    }
+    return true;
+}
 
-    // Randomize session string (Avoid 0xC? and 0x41)
-    generate(IRDA_RAND_STR.begin(), IRDA_RAND_STR.end(), [] { return esp_random() & ~0b11000001; });
+bool openSession() {
     // Randomize sip endpoints
     watchPort = esp_random() & 0xBE;
     ourPort = watchPort + 1;
 
-    auto send = concat(IRDA_STACK_CMD, IRDA_RAND_STR, PAD4, std::array<uint8_t, 3>{0x01, 0x00, 0x00});
+    // Randomize IRDA handshaking string (Avoid 0xCX and 0x41)
+    std::array<uint8_t, 4> IRDA_RAND_STR;
+    generate(IRDA_RAND_STR.begin(), IRDA_RAND_STR.end(), [] { return esp_random() & ~0b11000001; });
+
+    std::vector<uint8_t> send({0x01, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x00});
+    // Insert the random IRDA string after 0x01
+    std::copy_n(IRDA_RAND_STR.begin(), IRDA_RAND_STR.size(), send.begin() + 1);
+
     for (uint8_t count = 0; count < 6; count++) {
         send[send.size() - 2] = count;
         Frame::writeFrame(0xff, 0x3f, send, 11);
@@ -210,12 +217,15 @@ bool openSession() {
     }
     Display::showConnectingScreen("Negotiating session...");
 
-    std::array<uint8_t, 27> START_SESSION{0x19, 0x36, 0x66, 0xBE, watchPort, 0x01, 0x01, 0x02, 0x82,
-                                          0x01, 0x01, 0x83, 0x01, 0x3F,      0x84, 0x01, 0x0F, 0x85,
-                                          0x01, 0x80, 0x86, 0x02, 0x80,      0x03, 0x08, 0x01, 0x07};
+    constexpr uint8_t START_SESSION[]{0x19, 0x36, 0x66, 0xBE, 0,    0x01, 0x01, 0x02, 0x82,
+                                      0x01, 0x01, 0x83, 0x01, 0x3F, 0x84, 0x01, 0x0F, 0x85,
+                                      0x01, 0x80, 0x86, 0x02, 0x80, 0x03, 0x08, 0x01, 0x07};
+    send.clear();
+    send.insert(send.begin(), IRDA_RAND_STR.begin(), IRDA_RAND_STR.end());
+    send.insert(send.end(), std::begin(START_SESSION), std::end(START_SESSION));
+    send[IRDA_RAND_STR.size() + 4] = watchPort;
+    Frame::writeFrame(0xff, 0x93, send);
 
-    send = concat(IRDA_RAND_STR, START_SESSION);
-    Frame::writeFrame(0xff, 0x93, send, 5);
     frame = Frame::readFrame();
     if (frame.error) LOGFAIL;
     LOGI(TAG, "Watch accepted SIP port %02x", watchPort);
@@ -359,13 +369,14 @@ bool openSessionInClientRole() {
     Frame::writeFrame(ourPort, seq(SEQ_DATA, true, false), CLIENT_REPLY_SESSION_BEGIN);
 
     // NOTE: the problem here turned out to be us replying so quickly the watch missed it when no Serial taking up time
-    // Fixed this with repeating the BOF here, but maybe we should default to a higher default BOF repeat?
+    // Fixed this by increasing the default repeats of BOF
     int irdaFramesRecvd = 0;
     for (int i = 0; true; i++) {
         if (i > ABORT_AFTER_RETRIES) LOGFAIL;
         frame = Frame::readFrame();
         if (frame.error) LOGFAIL;
 
+        // What we're really looking for, session assignment from host (watch)
         if (frame.data.size() == 5 && frame.data[0] > 0x80 && frame.data[0] <= 0x8F) {
             session = (frame.data[0] & 0xf);
             Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), S(CLIENT_REPLY_SESSIONID_ASSIGN));
@@ -391,41 +402,6 @@ bool openSessionInClientRole() {
         }
     }
 
-    // // Lots of IRDA garbage who cares
-    // // TODO see if we can just ACK
-    // // < 0x32 0x0001840B497244413A4972434F4D4D13497244413A54696E7954503A4C73617053656C
-    // frame = Frame::readFrame();
-    // // if (dataLen > 0 && readBuffer[0] == 0 && readBuffer[1] == 0x01) {
-    // constexpr uint8_t IRDA_NEGOTIATE_0[]{0x01, 0x00, 0x84, 0x00, 0x00, 0x01, 0x00, 0x05, 0x01, 0x00, 0x00, 0x00,
-    // 0x09};
-    // // > 0x52 0x01008400000100050100000009
-    // Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), IRDA_NEGOTIATE_0);
-
-    // // more IRDA garbage
-    // // TODO see if we can just ACK
-    // // < 0x54 0x0001840B497244413A4972434F4D4D0A506172616D65746572737D
-    // frame = Frame::readFrame();
-    // // > 0x74 0x0100840000010005020006000106010101
-    // constexpr uint8_t IRDA_NEGOTIATE_1[]{0x01, 0x00, 0x84, 0x00, 0x00, 0x01, 0x00, 0x05, 0x02,
-    //                                      0x00, 0x06, 0x00, 0x01, 0x06, 0x01, 0x01, 0x01};
-    // Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), IRDA_NEGOTIATE_1);
-
-    // < 0x76 0x8903010001
-    // LOGE(TAG, "1");
-    // frame = readAckUntilDataFrame();
-    // LOGE(TAG, "Expecting Frame: 0x8?03010001, got:");
-    // Frame::log(frame);
-    // // Don't allow 0 as session
-    // if (!frame.error && frame.data.size() > 0 && frame.data[0] > 0x80 && frame.data[0] <= 0x8f) {
-    //     LOGE(TAG, "2");
-    //     session = (frame.data[0] & 0xf);
-    //     LOGI(TAG, "Received session id %01x from watch", session);
-    // } else {
-    //     LOGE(TAG, "Missed session id");
-    //     return false;
-    // }
-    //     LOGE(TAG, "3");
-
     // < 0x98 0x09030003000104
     frame = Frame::readFrame();
     if (!expectStartsWith({session, 0x03, 0x00, 0x03})) LOGFAIL;
@@ -449,8 +425,6 @@ bool ping() {
 }
 
 bool closeSession() {
-    // Display::showConnectingScreen("Closing session as host");
-
     // 0x83SS0201
     Frame::writeFrame(ourPort, seq(SEQ_DATA, false, true), S(SESSION_END));
     Frame::readFrame();
@@ -466,8 +440,6 @@ bool closeSession() {
 }
 
 bool swapRolesAndCloseSession() {
-    // Display::showConnectingScreen("Requesting watch takes over");
-
     // > 0x0308000001
     if (model == 3) {
         Frame::writeFrame(ourPort, seq(SEQ_DATA, false, true), S(CMD_SWAP_ROLES_3));
@@ -523,9 +495,8 @@ bool syncInClientRole() {
     FFat.begin();
 
     // Previously this was flash, then PSRAM, but largest files ~8kb, and we have minimum 250kb heap free
-    static std::vector<uint8_t> fileBuffer;
+    static std::vector<uint8_t> fileBuffer(8192);
     fileBuffer.clear();
-    fileBuffer.reserve(8192);
 
     Image::init();
 
@@ -555,56 +526,47 @@ bool syncInClientRole() {
     // < 0xBE 0x090301
     frame = readAckUntilDataFrame();
     if (!expectExactly(S(CLIENT_APP_ITER_NEXT))) LOGFAIL;
-    LOGD(TAG, "<< Yield next object from watch");
+    LOGD(TAG, "<< next");
     Frame::writeFrame(ourPort, seq(SEQ_ACK, true, false));
 
     // RIMG
     // < 0xB0
     // 0x09030000002003FF003E107DE1003A580000000034080074031000000008007403000000000008000800800002434D4430000000060000000100405748543000000006010052494D47
     frame = readAckUntilDataFrame();
-    if (getCmdName(frame) != "RIMG") {
-        LOGE(TAG, "Wrong command, expecting RIMG");
-        return false;
-    }
+    if (!expectAppPacketWithCommand("RIMG")) LOGFAIL;
     LOGD(TAG, "<< RIMG");
-    LOGD(TAG, ">> BDY0");
     Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), makeResponse(frame));
+    LOGD(TAG, ">> BDY0");
 
     // < 0xBE 0x090301
     frame = readAckUntilDataFrame();
-    if (!expectStartsWith({session, 0x03, 0x01})) LOGFAIL;
-    LOGD(TAG, "i++ from watch");
+    if (!expectExactly(S(CLIENT_APP_ITER_NEXT))) LOGFAIL;
+    LOGD(TAG, "<< next");
     Frame::writeFrame(ourPort, seq(SEQ_ACK, true, false));
 
     // RINF
     // < 0xD4
     // 0x09030000002003FF003E107DE1003A580000000034080074031000000008007403000000000008000800810002434D4430000000060000000100405748543000000006010052494E46
     frame = readAckUntilDataFrame();
-    if (getCmdName(frame) != "RINF") {
-        LOGE(TAG, "Wrong command, expecting RINF");
-        return false;
-    }
+    if (!expectAppPacketWithCommand("RINF")) LOGFAIL;
     LOGD(TAG, "<< RINF");
-    LOGD(TAG, ">> BDY0");
     Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), makeResponse(frame));
+    LOGD(TAG, ">> BDY0");
 
     // < 0xBE 0x090301
     frame = readAckUntilDataFrame();
-    if (!expectStartsWith({session, 0x03, 0x01})) LOGFAIL;
-    LOGD(TAG, "i++ from watch");
+    if (!expectExactly(S(CLIENT_APP_ITER_NEXT))) LOGFAIL;
+    LOGD(TAG, "<< next");
     Frame::writeFrame(ourPort, seq(SEQ_ACK, true, false));
 
     // RCMD
     // < 0xF8
     // 0x09030000002003FF003E107DE1003A580000000034080074031000000008007403000000000008000800820002434D4430000000060000000100405748543000000006010052434D44
     frame = readAckUntilDataFrame();
-    if (getCmdName(frame) != "RCMD") {
-        LOGE(TAG, "Wrong command, expecting RCMD");
-        return false;
-    }
+    if (!expectAppPacketWithCommand("RCMD")) LOGFAIL;
     LOGD(TAG, "<< RCMD");
-    LOGD(TAG, ">> BDY0");
     Frame::writeFrame(ourPort, seq(SEQ_DATA, true, true), makeResponse(frame));
+    LOGD(TAG, ">> BDY0");
 
     // < 0xBE 0x090301
     frame = readAckUntilDataFrame();
@@ -636,6 +598,7 @@ bool syncInClientRole() {
         auto [fileName, rpl0] = makeFilRplResponse(frame);
         auto fileCmdName = Frame::extractString(frame, 0x42, 4);
         LOGI(TAG, "<< %s saving to %s", fileCmdName.c_str(), fileName.c_str());
+
         Display::showProgressScreen(0, fileCount);
         Frame::writeFrame(ourPort, seq(SEQ_ACK, true, false));
 
@@ -660,10 +623,7 @@ bool syncInClientRole() {
             do {  // LOOP OVER FRAMES IN CHUNK
 
                 frame = Frame::readFrame();
-                if (!expectStartsWith(S(CLIENT_APP_PACKET))) {
-                    LOGE(TAG, "Unexpected session header");
-                    return false;
-                }
+                if (!expectStartsWith(S(CLIENT_APP_PACKET))) LOGFAIL;
                 // Snip off the session header - this is all app layer now
                 auto payload = getAppPayload(frame);
 
@@ -731,7 +691,7 @@ bool syncInClientRole() {
 
         frame = readAckUntilDataFrame();
         if (expectExactly(S(CLIENT_APP_ITER_NEXT))) {
-            LOGD(TAG, "i++ from watch");
+            LOGD(TAG, "<< next");
             Frame::writeFrame(ourPort, seq(SEQ_ACK, true, false));
         } else {
             return false;
@@ -747,7 +707,7 @@ void loop() {
         while (digitalRead(PIN_BUTTON) == LOW) {
             holdTime = millis() - startTime;
             if (holdTime > 500) {
-                Firmware::rebootIntoNextPartition();
+                Firmware::rebootIntoNextOtaPartition();
                 return;
             }
         }
@@ -767,11 +727,15 @@ void loop() {
     }
 
     Display::showIdleScreen();
-    if (openSession() && swapRolesAndCloseSession() && openSessionInClientRole() && syncInClientRole()) {
-        // Eventually we'll get hung up on, use a low timeout
-        readAckUntilDataFrame(250);
-        Display::showMountedScreen();
-        MassStorage::begin();
-        return;
+    static unsigned long lastBroadcast;
+    if (millis() - lastBroadcast > 1000) {
+        lastBroadcast = millis();
+        if (openSession() && swapRolesAndCloseSession() && openSessionInClientRole() && syncInClientRole()) {
+            // Eventually we'll get hung up on, use a low timeout
+            readAckUntilDataFrame(250);
+            Display::showMountedScreen();
+            MassStorage::begin();
+            return;
+        }
     }
 }

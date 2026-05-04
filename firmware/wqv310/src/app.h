@@ -57,6 +57,7 @@ std::span<const uint8_t> fill(std::span<const uint8_t> cmd, uint8_t session);
 std::vector<uint8_t> makeResponse(Frame::Frame frame);
 
 // Given a FIL0 command, returns the filename and a RPL0 response
+// FIL0 has a little different response type than the others, so don't use makeResponse
 std::pair<std::string, std::vector<uint8_t>> makeFilRplResponse(Frame::Frame frame);
 
 // For app payloads, get the 4-char command string at the end

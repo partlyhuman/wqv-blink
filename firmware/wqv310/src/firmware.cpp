@@ -15,11 +15,11 @@ void init() {
     esp_ota_mark_app_valid_cancel_rollback();
 }
 
-void rebootIntoNextPartition() {
-    rebootIntoPartition((THIS_FIRMWARE_SLOT + 1) % NUM_OTA_PARTITIONS);
+void rebootIntoNextOtaPartition() {
+    rebootIntoOtaPartition((THIS_FIRMWARE_SLOT + 1) % NUM_OTA_PARTITIONS);
 }
 
-void rebootIntoPartition(uint partNum) {
+void rebootIntoOtaPartition(uint partNum) {
     if (partNum >= NUM_OTA_PARTITIONS) {
         LOGE(TAG, "Out of range partition number %d", partNum);
         return;

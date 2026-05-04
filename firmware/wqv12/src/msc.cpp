@@ -19,9 +19,9 @@
 
 #define READONLY
 #define MSC_VENDOR_ID "Partlyhuman"
-#define MSC_PRODUCT_ID "WQV-1 Interface"
+#define MSC_PRODUCT_ID "WQV-BLINK"
 #define MSC_PRODUCT_REVISION "1.0"
-#define DRIVE_LABEL "QV1CKENIR"
+#define DRIVE_LABEL "WQV-BLINK"
 
 namespace MassStorage {
 
@@ -50,13 +50,13 @@ void usbEventCallback(void* arg, esp_event_base_t event_base, int32_t event_id, 
 int32_t onWrite(uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize) {
 #ifndef READONLY
     wl_write(flash_handle, (size_t)((lba * sect_size) + offset), (const void*)buffer, (size_t)bufsize);
-#endif
 
     // flash on writes
     static uint8_t f = HIGH;
     digitalWrite(PIN_LED, f);
     f = (f == HIGH) ? LOW : HIGH;
     // TODO something so it doesn't stay on - handle loop, or vxtask/watchdog
+#endif
 
     return bufsize;
 }
@@ -106,7 +106,6 @@ void init() {
 }
 
 void begin() {
-    digitalWrite(PIN_LED, LED_OFF);
     f_setlabel(DRIVE_LABEL);
     active = true;
     MSC.mediaPresent(active);

@@ -40,12 +40,9 @@ std::string trimTrailingSpaces(std::string src) {
     return src.substr(0, src.find_last_not_of(' ') + 1);
 }
 
-std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t> data) {
+std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t> header) {
     try {
-        // Let's make things easy on ourselves and assume the marker is in the first 512 bytes of the file
         // Easier to use as char here
-        std::span<const char> header(reinterpret_cast<const char *>(data.data()),
-                                     min(data.size(), static_cast<size_t>(512)));
         auto iter = header.begin();
 
         if (iter[0] != 0xff || iter[1] != 0xd8) throw std::runtime_error("Invalid SOI");
@@ -54,38 +51,35 @@ std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t>
         // Make sure we at least have enough to read the marker
         while ((iter + 4) < header.end()) {
             if (iter[0] != 0xff) throw std::runtime_error("Expected 0xff in marker");
-            uint8_t marker = iter[1];
+            uint8_t markerId = iter[1];
             iter += 2;
 
             // len includes the bytes themselves, but we don't want to consume them
             uint16_t len = (iter[0] << 8) | iter[1];
             LOGV(TAG, "Encountered marker %02x of length %d", marker, len);
-            if (marker != 0xe2) {
+            if (markerId != 0xe2) {
                 iter += len;
                 continue;
             }
 
             LOGD(TAG, "Found APP2 marker, extracting metadata");
-            // consume the length too, we want to point to the data
-            const char *payload = header.data() + (iter - header.begin()) + 2;
-            size_t payloadLen = len - 2;
+            std::span<const uint8_t> marker(iter + 2, iter + len);
+            if (marker.size() < sizeof(Timestamp)) throw std::runtime_error("APP2 marker not big enough for timestamp");
 
-            if (payloadLen < sizeof(Timestamp)) throw std::runtime_error("APP2 marker not big enough for timestamp");
-
-            size_t strLen = payloadLen - sizeof(Timestamp);
-            Timestamp timestamp;
-            std::memcpy(&timestamp, payload + strLen, sizeof(Timestamp));
-
-            std::string title;
-            bool isAscii = std::all_of(payload, payload + strLen, [](char b) { return b <= 0x7F; });
+            std::string title{};
+            bool isAscii =
+                std::all_of(marker.begin(), marker.end() - sizeof(Timestamp), [](char b) { return b <= 0x7F; });
             if (isAscii) {
-                title = trimTrailingSpaces(std::string(payload, strLen));
+                title = trimTrailingSpaces(
+                    std::string(reinterpret_cast<const char *>(marker.data()), marker.size() - sizeof(Timestamp)));
             }
+
+            Timestamp timestamp;
+            std::memcpy(&timestamp, marker.data() + marker.size() - sizeof(Timestamp), sizeof(Timestamp));
+
             return {title, timestamp};
         }
-
         LOGE(TAG, "Couldn't find APP2 marker in JPEG, no metadata");
-
     } catch (std::exception &e) {
         LOGE(TAG, "%s", e.what());
     }
@@ -127,23 +121,24 @@ std::string getBaseFilename(const Timestamp t) {
     return "WQV" + basepath + "_" + pad2(count + 1);
 }
 
-void postProcess(std::string fileName, const std::vector<uint8_t> &data) {
+void postProcess(std::string fileName, std::span<const uint8_t> data) {
     std::string dir = "/";
 
-    auto meta = getMetaFromJpegMarker(data);
+    auto [title, timestamp] = getMetaFromJpegMarker(data);
 
-    Timestamp timestamp = meta.second;
     std::string base = getBaseFilename(timestamp);
     time_t time = timestampToTime(timestamp);
     setSystemTime(time);
 
-    LOGI(TAG, "File %s has metadata time=%s title='%s'", fileName.c_str(), std::ctime(&time), meta.first.c_str());
+    LOGI(TAG, "File %s has metadata time=%s title='%s'", fileName.c_str(), std::ctime(&time), title.c_str());
 
     // Write out the title into a sidecar file if it exists
-    if (meta.first.size() > 0) {
+    if (title.size() > 0) {
         auto file = FFat.open((dir + base + "_title.txt").c_str(), "w", true);
-        file.println(meta.first.c_str());
-        file.close();
+        if (file) {
+            file.println(title.c_str());
+            file.close();
+        }
     }
 
     saveToFlash(data, dir + base + ".jpg");
