@@ -1,8 +1,9 @@
 # WQV Blink
 #### A Casio WQV Series USB Sync Dongle
 
-This is an easy-to-use, self-contained device that retrieves photos from the series of extremely cool 2000-era [Casio WQV camera watches](https://www.casio.com/us/watches/50th/Heritage/2000s/).
-This project would not be possible without the reverse engineering work of [Marcus Gröber](https://www.mgroeber.de/).
+<img src="img/lineup.jpg" width="400"/>
+
+This is an easy-to-use, self-contained device that retrieves photos from the series of extremely cool 2000-era [Casio WQV camera watches](https://www.casio.com/us/watches/50th/Heritage/2000s/) and stores them as a USB drive.
 
 ## Manual
 
@@ -22,13 +23,11 @@ Firmware [wqv310](firmware/wqv310):
 * WQV-3 ✅
 * WQV-10 ✅
 
-## PCB Build
+## Building
 
-<img src="img/lineup.jpg" width="400"/>
+The PCB, case, and firmware in this repository go together as pictured here. 
 
-The PCB, case, and firmware in this repository go together as pictured here.
-
-### Bill of Materials
+Gerbers are [included](pcb/WQV1-S3-SuperMini/production/). Fabricate with basic options, nothing fancy. 1.6mm thickness, HASL is just fine.
 
 | Reference | Value | Details |
 |----|----|----|
@@ -40,16 +39,11 @@ The PCB, case, and firmware in this repository go together as pictured here.
 | U2 | SSD1306_OLED_128x64 | https://www.aliexpress.com/item/1005006141235306.html (Yellow Blue) |
 | U3 | TFDU4101-TR3 | https://www.digikey.com/short/nrdh27mb |
 
-
 R1 is used to save power to the IR LED. The TFDU4101 has built-in LED resistors so this can be 0R for maximum TX power. There is a lot of good info on sample circuits and component values in the [TFDU4101 datasheet (PDF)](https://www.vishay.com/docs/81288/tfdu4101.pdf)
 
-### PCB
+The [case](case/) is split into a top and bottom print. It can be printed with very basic settings. With the correct orientation, no supports are needed.
 
-Gerbers are included in [pcb/WQV1-S3-SuperMini/production/](pcb/WQV1-S3-SuperMini/production/). Fabricate with basic options, nothing fancy. 1.6mm thickness, HASL is just fine.
-
-### Programming and assembly
-
-Builds are automated using PlatformIO. In the [firmware/irda-esp32](firmware/irda-esp32) directory, run `pio run -e esp32_s3_supermini` or use the PlatformIO VSCode extension.
+Builds are made with PlatformIO. In the firmware's directory, run `pio run -e esp32_s3_supermini` or use the PlatformIO VSCode extension. Note that this will not give you the dual-boot/dual-firmware option; for this, extra scripts are included. Alternatively, if you do not need to change anything, you can use the [web updater](https://wqv.partlyhuman.com/) to program the ESP32.
 
 ## DIY Build options
 
