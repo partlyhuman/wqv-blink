@@ -14,14 +14,17 @@ Pre-assembled devices ars available in limited quantities on my [Ko-Fi shop](htt
 
 ## Compatibility
 
+Firmware [wqv12](firmware/wqv12):
 * WQV-1 ✅
 * WQV-2 ✅
-* WQV-3 🔥 Proof of concept done! Coming very soon!
-* WQV-10 🔜
+
+Firmware [wqv310](firmware/wqv310):
+* WQV-3 ✅
+* WQV-10 ✅
 
 ## PCB Build
 
-<img src="img/dongle.jpg" width="400"/>
+<img src="img/lineup.jpg" width="400"/>
 
 The PCB, case, and firmware in this repository go together as pictured here.
 
