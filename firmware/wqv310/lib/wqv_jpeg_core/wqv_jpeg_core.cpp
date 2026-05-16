@@ -4,6 +4,7 @@
 #include <cstring>
 #include <ctime>
 #include <format>
+#include <span>
 #include <stdexcept>
 
 #include "MicroExif.h"
@@ -46,12 +47,12 @@ std::vector<uint8_t> makeExifBlob(const Timestamp &t, const std::string title, i
     // YYYY:MM:DD HH:MM:SS
     auto dateTimeString =
         std::format("{:04}:{:02}:{:02} {:02}:{:02}:00", t.year2k + 2000, t.month, t.day, t.hour, t.minute);
-    LOGI(TAG, "datetime = %s", dateTimeString.c_str());
+    LOGV(TAG, "datetime = %s", dateTimeString.c_str());
     exif.addTag(ExifTag(0x0132, TYPE_ASCII, dateTimeString.c_str()));
 
     // ImageTitle
-    if (title != "") {
-        LOGI(TAG, "nonblank title '%s'", title.c_str());
+    if (title.size() > 0) {
+        LOGV(TAG, "nonblank title '%s'", title.c_str());
         exif.addTag(ExifTag(0xa436, TYPE_ASCII, title.c_str()));
     }
 

@@ -680,7 +680,7 @@ bool syncInClientRole() {
         LOGI(TAG, "File '%s' done!", fileName.c_str());
 
         Display::showProgressScreen(1, fileCount);
-        Image::postProcess(fileName, fileBuffer);
+        Image::postProcess(fileName, fileBuffer, model);
         fileBuffer.clear();
 
         // RPL0

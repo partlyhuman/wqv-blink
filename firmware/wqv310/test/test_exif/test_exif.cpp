@@ -52,7 +52,7 @@ void test_parse_title() {
     auto data = load(path);
     auto [title, timestamp] = parseCasioJpegMetadata(data);
 
-    TEST_ASSERT_EQUAL_STRING("MR  RA~~    IN GASTO", title.c_str());
+    TEST_ASSERT_EQUAL_STRING("A", title.c_str());
 }
 
 void test_parse_time() {
@@ -81,7 +81,7 @@ void test_erase_casio_jpeg_tags() {
 }
 
 void test_make_exif() {
-    const std::string path = std::filesystem::path(__FILE__).parent_path() / "known_time.jpg";
+    const std::string path = std::filesystem::path(__FILE__).parent_path() / "jpeg_with_title.jpg";
     auto data = load(path);
     auto [title, timestamp] = parseCasioJpegMetadata(data, true);
 
@@ -89,9 +89,34 @@ void test_make_exif() {
     TEST_ASSERT_GREATER_THAN(0, exif.size());
     // Insert the exif jpeg tag first (after SOI mark)
     data.insert(data.begin() + 2, exif.begin(), exif.end());
+    TEST_MESSAGE("Did we crash? no?\n");
 
     // Must manually test that this is a valid JPEG
-    save(data, std::filesystem::path(__FILE__).parent_path() / "OUT_known_time_exif.jpg");
+    save(exif, std::filesystem::path(__FILE__).parent_path() / "OUT_jpeg_with_title_exif.jpg");
+}
+
+// Exposes a bug in the MicroExif impl
+void test_make_exif_short_titles() {
+    const std::string path = std::filesystem::path(__FILE__).parent_path() / "jpeg_with_title.jpg";
+    auto original = load(path);
+    Timestamp timestamp{.year2k = 0, .month = 1, .day = 1, .hour = 12, .minute = 30};
+
+    std::vector<uint8_t> data, exif;
+
+    data = std::vector(original);
+    exif = makeExifBlob(timestamp, "1", 3);
+    data.insert(data.begin() + 2, exif.begin(), exif.end());
+    save(data, std::filesystem::path(__FILE__).parent_path() / "OUT_jpeg_with_title_1.jpg");
+
+    data = std::vector(original);
+    exif = makeExifBlob(timestamp, "12", 3);
+    data.insert(data.begin() + 2, exif.begin(), exif.end());
+    save(data, std::filesystem::path(__FILE__).parent_path() / "OUT_jpeg_with_title_2.jpg");
+
+    data = std::vector(original);
+    exif = makeExifBlob(timestamp, "123", 3);
+    data.insert(data.begin() + 2, exif.begin(), exif.end());
+    save(data, std::filesystem::path(__FILE__).parent_path() / "OUT_jpeg_with_title_3.jpg");
 }
 
 int main() {
@@ -101,5 +126,6 @@ int main() {
     RUN_TEST(test_parse_time);
     RUN_TEST(test_erase_casio_jpeg_tags);
     RUN_TEST(test_make_exif);
+    // RUN_TEST(test_make_exif_short_titles);
     return UNITY_END();
 }

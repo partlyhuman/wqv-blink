@@ -207,9 +207,14 @@ private:
             buffer[bufSize + (bigendian ? 0 : 3)] = tag.value[3];
             break;
         case 0x0002: // ASCII
-            buffer.resize(bufSize + tag.value.size(), 0);
-            std::copy(tag.value.begin(), tag.value.end(), buffer.begin() + bufSize);
-            break;
+            // REB: This is a bug for size < 4!
+            // buffer.resize(bufSize + tag.value.size(), 0);
+            // std::copy(tag.value.begin(), tag.value.end(), buffer.begin() + bufSize);
+            // break;
+            // REB: Inline strings are fine but they MUST ALWAYS BE EXACTLY 4 BYTES
+            buffer.resize(bufSize + 4, 0);
+            std::copy(tag.value.begin(), tag.value.begin() + std::min<size_t>(4, tag.value.size()),
+                      buffer.begin() + bufSize);
         }
     }
 

@@ -2,8 +2,8 @@
 
 #include <FFat.h>
 
-#include <cstring>
 #include <ctime>
+#include <span>
 #include <unordered_map>
 
 #include "log.h"
@@ -59,10 +59,14 @@ std::string getBaseFilename(const Timestamp t) {
     return "WQV" + basepath + "_" + pad2(count + 1);
 }
 
-void postProcess(std::string fileName, std::vector<uint8_t> data) {
+void postProcess(std::string fileName, std::vector<uint8_t> data, int wqvModel) {
     std::string dir = "/";
 
-    auto [title, timestamp] = parseCasioJpegMetadata(data);
+    // Parse proprietary metadata tag and strip it from the JPEG
+    auto [title, timestamp] = parseCasioJpegMetadata(data, true);
+    // Convert metadata to EXIF tags and insert into the JPEG structure right after the SOI tag
+    auto exif = makeExifBlob(timestamp, title, wqvModel);
+    data.insert(data.begin() + 2, exif.begin(), exif.end());
 
     std::string base = getBaseFilename(timestamp);
     time_t time = timestampToTime(timestamp);
