@@ -32,7 +32,7 @@ std::string trimTrailingSpaces(std::string src) {
     return src;
 }
 
-std::vector<uint8_t> makeExifBlob(const Timestamp &t, const std::string title, int wqvModel) {
+std::vector<uint8_t> makeExifBlob(const Timestamp &t, const std::string &title, int wqvModel) {
     ExifBuilder exif;
 
     const uint16_t TYPE_ASCII = 0x0002;
@@ -50,24 +50,26 @@ std::vector<uint8_t> makeExifBlob(const Timestamp &t, const std::string title, i
     LOGV(TAG, "datetime = %s", dateTimeString.c_str());
     exif.addTag(ExifTag(0x0132, TYPE_ASCII, dateTimeString.c_str()));
 
-    // ImageTitle
+    // ImageDescription
     if (title.size() > 0) {
         LOGV(TAG, "nonblank title '%s'", title.c_str());
-        exif.addTag(ExifTag(0xa436, TYPE_ASCII, title.c_str()));
+        // Previously tried 0xa436 ImageTitle
+        exif.addTag(ExifTag(0x010E, TYPE_ASCII, title.c_str()));
     }
 
     return exif.buildExifBlob();
 }
 
-std::pair<std::string, Timestamp> parseCasioJpegMetadata(std::vector<uint8_t> &header, bool deleteAfterParse) {
+std::pair<std::string, Timestamp> parseCasioJpegMetadata(std::vector<uint8_t> &data, bool replaceWithExif,
+                                                         int wqvModel) {
     try {
-        auto iter = header.begin();
+        auto iter = data.begin();
 
         if (iter[0] != 0xff || iter[1] != 0xd8) throw std::runtime_error("Invalid SOI");
         iter += 2;
 
         // Make sure we at least have enough to read the marker
-        while ((iter + 4) < header.end()) {
+        while ((iter + 4) < data.end()) {
             if (iter[0] != 0xff) throw std::runtime_error("Expected 0xff in marker");
             uint8_t markerId = iter[1];
             iter += 2;
@@ -95,10 +97,13 @@ std::pair<std::string, Timestamp> parseCasioJpegMetadata(std::vector<uint8_t> &h
             Timestamp timestamp;
             std::memcpy(&timestamp, marker.data() + marker.size() - sizeof(Timestamp), sizeof(Timestamp));
 
-            if (deleteAfterParse) {
-                size_t before = header.size();
-                header.erase(iter - 2, iter + len);
-                LOGI(TAG, "Stripped casio metadata from JPEG. Was %ld now %ld", before, header.size());
+            if (replaceWithExif) {
+                // LOGI(TAG, "Replacing metadata with EXIF");
+                size_t before = data.size();
+                data.erase(iter - 2, iter + len);
+                auto exif = makeExifBlob(timestamp, title, wqvModel);
+                data.insert(iter - 2, exif.begin(), exif.end());
+                LOGI(TAG, "Replaced casio metadata with EXIF. Was %ld now %ld", before, data.size());
             }
 
             return {title, timestamp};

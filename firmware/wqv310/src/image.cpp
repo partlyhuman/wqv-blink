@@ -3,6 +3,7 @@
 #include <FFat.h>
 
 #include <ctime>
+#include <format>
 #include <span>
 #include <unordered_map>
 
@@ -37,10 +38,6 @@ bool saveToFlash(std::span<const uint8_t> data, std::string destPath) {
     return true;
 }
 
-static inline std::string pad2(int v) {
-    return v < 10 ? "0" + std::to_string(v) : std::to_string(v);
-}
-
 std::string getBaseFilename(const Timestamp t) {
     std::string basepath;
     // File naming strategies:
@@ -51,22 +48,19 @@ std::string getBaseFilename(const Timestamp t) {
     // basepath = std::to_string(img->month) + "-" + std::to_string(img->day) + "-" +
     //            std::to_string(2000 + img->year_minus_2000) + "_" + pad2(img->hour) + "-" + pad2(img->minute);
     // - just YYYYMMDD, plus count
-    basepath = std::to_string(t.year2k + 2000) + pad2(t.month) + pad2(t.day);
+    basepath = std::format("{:04}{:02}{:02}", 2000 + t.year2k, t.month, t.day);
     // - unix style timestamp, plus count: shorter, no collisions, not very legible
     // basepath = std::to_string(time);
 
     int count = timestampCounts[basepath]++;
-    return "WQV" + basepath + "_" + pad2(count + 1);
+    return std::format("WQV{}_{:02}", basepath, count + 1);
 }
 
 void postProcess(std::string fileName, std::vector<uint8_t> data, int wqvModel) {
     std::string dir = "/";
 
-    // Parse proprietary metadata tag and strip it from the JPEG
-    auto [title, timestamp] = parseCasioJpegMetadata(data, true);
-    // Convert metadata to EXIF tags and insert into the JPEG structure right after the SOI tag
-    auto exif = makeExifBlob(timestamp, title, wqvModel);
-    data.insert(data.begin() + 2, exif.begin(), exif.end());
+    // Parse proprietary metadata tag and replace with standard EXIF
+    auto [title, timestamp] = parseCasioJpegMetadata(data, true, wqvModel);
 
     std::string base = getBaseFilename(timestamp);
     time_t time = timestampToTime(timestamp);
