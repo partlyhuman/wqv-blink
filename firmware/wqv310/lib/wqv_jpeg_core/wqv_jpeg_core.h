@@ -8,4 +8,4 @@
 
 time_t timestampToTime(const Timestamp src);
 
-std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t> header);
+std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t> data);
