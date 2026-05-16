@@ -50,14 +50,15 @@ std::vector<uint8_t> makeExifBlob(const Timestamp &t, const std::string title, i
     exif.addTag(ExifTag(0x0132, TYPE_ASCII, dateTimeString.c_str()));
 
     // ImageTitle
-    if (title.length() > 0) {
+    if (title != "") {
+        LOGI(TAG, "nonblank title '%s'", title.c_str());
         exif.addTag(ExifTag(0xa436, TYPE_ASCII, title.c_str()));
     }
 
     return exif.buildExifBlob();
 }
 
-std::pair<std::string, Timestamp> parseCasioJpegMetadata(std::vector<uint8_t> &header, ) {
+std::pair<std::string, Timestamp> parseCasioJpegMetadata(std::vector<uint8_t> &header, bool deleteAfterParse) {
     try {
         auto iter = header.begin();
 
@@ -82,9 +83,9 @@ std::pair<std::string, Timestamp> parseCasioJpegMetadata(std::vector<uint8_t> &h
             std::span<const uint8_t> marker(iter + 2, iter + len);
             if (marker.size() < sizeof(Timestamp)) throw std::runtime_error("APP2 marker not big enough for timestamp");
 
-            std::string title{};
-            bool isAscii =
-                std::all_of(marker.begin(), marker.end() - sizeof(Timestamp), [](char b) { return b <= 0x7F; });
+            std::string title;
+            bool isAscii = std::all_of(marker.begin(), marker.end() - sizeof(Timestamp),
+                                       [](unsigned char b) { return b <= 0x7F; });
             if (isAscii) {
                 title = trimTrailingSpaces(
                     std::string(reinterpret_cast<const char *>(marker.data()), marker.size() - sizeof(Timestamp)));

@@ -71,17 +71,27 @@ void test_parse_time() {
 void test_erase_casio_jpeg_tags() {
     const std::string path = std::filesystem::path(__FILE__).parent_path() / "jpeg_with_title.jpg";
     auto data = load(path);
+    size_t originalSize = data.size();
     parseCasioJpegMetadata(data, true);
-    save(data, std::filesystem::path(__FILE__).parent_path() / "jpeg_with_title_stripped.jpg");
+
+    TEST_ASSERT_LESS_THAN(originalSize, data.size());
+
+    // Must manually test that this is a valid JPEG
+    save(data, std::filesystem::path(__FILE__).parent_path() / "OUT_jpeg_with_title_stripped.jpg");
 }
 
 void test_make_exif() {
-    const std::string path = std::filesystem::path(__FILE__).parent_path() / "jpeg_with_title.jpg";
+    const std::string path = std::filesystem::path(__FILE__).parent_path() / "known_time.jpg";
     auto data = load(path);
-    auto [title, timestamp] = parseCasioJpegMetadata(data);
+    auto [title, timestamp] = parseCasioJpegMetadata(data, true);
 
     auto exif = makeExifBlob(timestamp, title, 10);
     TEST_ASSERT_GREATER_THAN(0, exif.size());
+    // Insert the exif jpeg tag first (after SOI mark)
+    data.insert(data.begin() + 2, exif.begin(), exif.end());
+
+    // Must manually test that this is a valid JPEG
+    save(data, std::filesystem::path(__FILE__).parent_path() / "OUT_known_time_exif.jpg");
 }
 
 int main() {
