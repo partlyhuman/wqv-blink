@@ -21,10 +21,12 @@ time_t timestampToTime(const Timestamp src) {
     return time;
 }
 
-
 std::string trimTrailingSpaces(std::string src) {
-    if (src.find_first_not_of(' ') == std::string::npos) return "";
-    return src.substr(0, src.find_last_not_of(' ') + 1);
+    auto isTrim = [](unsigned char c) { return c == 0x20 || c == 0x00; };
+    while (!src.empty() && isTrim((unsigned char)src.back())) {
+        src.pop_back();
+    }
+    return src;
 }
 
 std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t> header) {
