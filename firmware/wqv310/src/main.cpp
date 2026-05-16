@@ -12,7 +12,7 @@
 #include "irda_hal.h"
 #include "log.h"
 #include "msc.h"
-#include "types.h"
+#include "wqv_types.h"
 
 // Temp debugging aid
 #define LOGFAIL            \

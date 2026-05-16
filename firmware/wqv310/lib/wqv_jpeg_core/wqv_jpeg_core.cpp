@@ -1,0 +1,73 @@
+#include "wqv_jpeg_core.h"
+
+#include <algorithm>
+#include <cstring>
+#include <ctime>
+#include <stdexcept>
+
+#include "log.h"
+
+static const char *TAG = "JPEG";
+
+time_t timestampToTime(const Timestamp src) {
+    tm t{};
+    t.tm_year = (2000 + src.year2k) - 1900;
+    t.tm_mon = src.month - 1;
+    t.tm_mday = src.day;
+    t.tm_hour = src.hour;
+    t.tm_min = src.minute;
+    t.tm_isdst = 0;
+    time_t time = mktime(&t);
+    return time;
+}
+
+
+std::string trimTrailingSpaces(std::string src) {
+    if (src.find_first_not_of(' ') == std::string::npos) return "";
+    return src.substr(0, src.find_last_not_of(' ') + 1);
+}
+
+std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t> header) {
+    try {
+        auto iter = header.begin();
+
+        if (iter[0] != 0xff || iter[1] != 0xd8) throw std::runtime_error("Invalid SOI");
+        iter += 2;
+
+        // Make sure we at least have enough to read the marker
+        while ((iter + 4) < header.end()) {
+            if (iter[0] != 0xff) throw std::runtime_error("Expected 0xff in marker");
+            uint8_t markerId = iter[1];
+            iter += 2;
+
+            // len includes the bytes themselves, but we don't want to consume them
+            uint16_t len = (iter[0] << 8) | iter[1];
+            LOGV(TAG, "Encountered marker %02x of length %d", marker, len);
+            if (markerId != 0xe2) {
+                iter += len;
+                continue;
+            }
+
+            LOGD(TAG, "Found APP2 marker, extracting metadata");
+            std::span<const uint8_t> marker(iter + 2, iter + len);
+            if (marker.size() < sizeof(Timestamp)) throw std::runtime_error("APP2 marker not big enough for timestamp");
+
+            std::string title{};
+            bool isAscii =
+                std::all_of(marker.begin(), marker.end() - sizeof(Timestamp), [](char b) { return b <= 0x7F; });
+            if (isAscii) {
+                title = trimTrailingSpaces(
+                    std::string(reinterpret_cast<const char *>(marker.data()), marker.size() - sizeof(Timestamp)));
+            }
+
+            Timestamp timestamp;
+            std::memcpy(&timestamp, marker.data() + marker.size() - sizeof(Timestamp), sizeof(Timestamp));
+
+            return {title, timestamp};
+        }
+        LOGE(TAG, "Couldn't find APP2 marker in JPEG, no metadata");
+    } catch (std::exception &e) {
+        LOGE(TAG, "%s", e.what());
+    }
+    return {};
+}
