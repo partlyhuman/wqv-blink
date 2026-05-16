@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cstring>
 #include <ctime>
+#include <format>
 #include <stdexcept>
 
+#include "MicroExif.h"
 #include "log.h"
 
 static const char *TAG = "JPEG";
@@ -29,7 +31,33 @@ std::string trimTrailingSpaces(std::string src) {
     return src;
 }
 
-std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t> header) {
+std::vector<uint8_t> makeExifBlob(const Timestamp &t, const std::string title, int wqvModel) {
+    ExifBuilder exif;
+
+    const uint16_t TYPE_ASCII = 0x0002;
+
+    // Manufacturer
+    exif.addTag(ExifTag(0x010F, TYPE_ASCII, "Casio"));
+    // Model
+    auto model = std::format("WQV-{}", wqvModel);
+    exif.addTag(ExifTag(0x0110, TYPE_ASCII, model.c_str()));
+
+    // ModifyDate (DateTime)
+    // YYYY:MM:DD HH:MM:SS
+    auto dateTimeString =
+        std::format("{:04}:{:02}:{:02} {:02}:{:02}:00", t.year2k + 2000, t.month, t.day, t.hour, t.minute);
+    LOGI(TAG, "datetime = %s", dateTimeString.c_str());
+    exif.addTag(ExifTag(0x0132, TYPE_ASCII, dateTimeString.c_str()));
+
+    // ImageTitle
+    if (title.length() > 0) {
+        exif.addTag(ExifTag(0xa436, TYPE_ASCII, title.c_str()));
+    }
+
+    return exif.buildExifBlob();
+}
+
+std::pair<std::string, Timestamp> parseCasioJpegMetadata(std::vector<uint8_t> &header, ) {
     try {
         auto iter = header.begin();
 
@@ -64,6 +92,12 @@ std::pair<std::string, Timestamp> getMetaFromJpegMarker(std::span<const uint8_t>
 
             Timestamp timestamp;
             std::memcpy(&timestamp, marker.data() + marker.size() - sizeof(Timestamp), sizeof(Timestamp));
+
+            if (deleteAfterParse) {
+                size_t before = header.size();
+                header.erase(iter - 2, iter + len);
+                LOGI(TAG, "Stripped casio metadata from JPEG. Was %ld now %ld", before, header.size());
+            }
 
             return {title, timestamp};
         }

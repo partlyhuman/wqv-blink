@@ -59,10 +59,10 @@ std::string getBaseFilename(const Timestamp t) {
     return "WQV" + basepath + "_" + pad2(count + 1);
 }
 
-void postProcess(std::string fileName, std::span<const uint8_t> data) {
+void postProcess(std::string fileName, std::vector<uint8_t> data) {
     std::string dir = "/";
 
-    auto [title, timestamp] = getMetaFromJpegMarker(data);
+    auto [title, timestamp] = parseCasioJpegMetadata(data);
 
     std::string base = getBaseFilename(timestamp);
     time_t time = timestampToTime(timestamp);
