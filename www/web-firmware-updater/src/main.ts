@@ -1,4 +1,4 @@
-import FIRMWARE_DATA_URL from "data-url:./bin/release_2.0.bin";
+import FIRMWARE_DATA_URL from "data-url:./bin/release_2.1b.bin";
 import {ESPLoader, IEspLoaderTerminal, Transport} from "esptool-js";
 
 const $progress = document.querySelector("progress");
