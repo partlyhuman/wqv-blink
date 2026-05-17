@@ -98,12 +98,9 @@ std::pair<std::string, Timestamp> parseCasioJpegMetadata(std::vector<uint8_t> &d
             std::memcpy(&timestamp, marker.data() + marker.size() - sizeof(Timestamp), sizeof(Timestamp));
 
             if (replaceWithExif) {
-                // LOGI(TAG, "Replacing metadata with EXIF");
-                size_t before = data.size();
                 data.erase(iter - 2, iter + len);
                 auto exif = makeExifBlob(timestamp, title, wqvModel);
                 data.insert(iter - 2, exif.begin(), exif.end());
-                LOGI(TAG, "Replaced casio metadata with EXIF. Was %ld now %ld", before, data.size());
             }
 
             return {title, timestamp};

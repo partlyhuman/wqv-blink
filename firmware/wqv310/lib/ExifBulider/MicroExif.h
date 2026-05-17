@@ -215,6 +215,7 @@ private:
             buffer.resize(bufSize + 4, 0);
             std::copy(tag.value.begin(), tag.value.begin() + std::min<size_t>(4, tag.value.size()),
                       buffer.begin() + bufSize);
+            break;
         }
     }
 
